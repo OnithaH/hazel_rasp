@@ -136,12 +136,47 @@ class DBManager:
         except Exception as e:
             print(f"⚠️ log_distraction Error: {e}")
 
+    def get_active_session(self):
+        """Find any study session currently running for this robot."""
+        rid = self.get_robot_id()
+        if not rid: return None
+        
+        try:
+            if not self.conn or self.conn.closed: self._connect()
+            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    'SELECT id, focus_goal, scheduled_duration, phone_detection_enabled, break_activity '
+                    'FROM "StudySession" WHERE robot_id = %s AND end_time IS NULL '
+                    'ORDER BY start_time DESC LIMIT 1',
+                    (rid,)
+                )
+                return cur.fetchone()
+        except Exception as e:
+            print(f"⚠️ get_active_session Error: {e}")
+        return None
+
+    def get_revision_questions(self, material_id):
+        """Fetch all questions for a specific material."""
+        try:
+            if not self.conn or self.conn.closed: self._connect()
+            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    'SELECT question, answer FROM "RevisionQuestion" '
+                    'WHERE material_id = %s',
+                    (material_id,)
+                )
+                return cur.fetchall()
+        except Exception as e:
+            print(f"⚠️ get_revision_questions Error: {e}")
+        return []
+
     def poll_aroma_commands(self):
         """Checks for active Aroma configurations from the dashboard."""
         rid = self.get_robot_id()
         if not rid: return None
         
         try:
+            if not self.conn or self.conn.closed: self._connect()
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     'SELECT scent_name FROM "AromaConfiguration" '
@@ -161,5 +196,6 @@ if __name__ == "__main__":
     if rid:
         print(f"✅ Diagnostic OK. Connected as Robot: {rid}")
         print(f"📡 Aroma Check: {mgr.poll_aroma_commands()}")
+        print(f"📚 Active Session: {mgr.get_active_session()}")
     else:
         print("❌ Diagnostic FAILED. Check credentials.")

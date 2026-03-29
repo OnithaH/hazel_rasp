@@ -109,13 +109,13 @@ except Exception as e:
 run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs_convo=False, mode_name="General")
 
 # --- 5. MAIN LOOP ---
+current_active_mode = "General"
 try:
     last_sync = 0
     last_dht_request = 0
     while True:
         # A. Telemetry & Battery Safety (Every 10s)
         current_v = get_voltage()
-        # SILENCED: print(f"🔋 Battery: {current_v}V")
         
         # Poll DHT every 30s
         if time.time() - last_dht_request > 30:
@@ -123,24 +123,41 @@ try:
             last_dht_request = time.time()
 
         if 0.1 < current_v < 6.4: # Shutdown for 2S Li-ion
-            ser.write(b'0') # JBL OFF
+            if ser: ser.write(b'0') # JBL OFF
             os.system("sudo shutdown now")
 
-        # B. Check Physical Inputs (ESP32 UART)
+        # B. Check Remote Web Commands (From db_sync_worker)
+        if os.path.exists("/tmp/hazel_mode_cmd"):
+            try:
+                with open("/tmp/hazel_mode_cmd", "r") as f:
+                    cmd = f.read().strip()
+                os.remove("/tmp/hazel_mode_cmd")
+                
+                if cmd == "MODE_STUDY" and current_active_mode != "Study":
+                    run_program("study_mode/Hazel_Integrated.py", ENV_STUDY, True, False, "Study")
+                    current_active_mode = "Study"
+            except Exception as e:
+                print(f"⚠️ Remote Cmd Error: {e}")
+
+        # C. Check Physical Inputs (ESP32 UART)
         if ser and ser.in_waiting > 0:
             raw = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
             
             if "MODE_GENERAL" in raw: 
                 run_program("general_mode/general_mode.py", ENV_GENERAL, True, False, "General")
+                current_active_mode = "General"
             
             elif "MODE_STUDY" in raw: 
                 run_program("study_mode/Hazel_Integrated.py", ENV_STUDY, True, False, "Study")
+                current_active_mode = "Study"
             
             elif "MODE_GAME" in raw:  
                 run_program("game_mode/Games_combined.py", ENV_GAME, False, False, "Game")
+                current_active_mode = "Game"
             
             elif "MODE_MUSIC" in raw: 
                 run_program("music_mode/music_mode.py", ENV_MUSIC, True, False, "Music")
+                current_active_mode = "Music"
             
             elif "Vol up" in raw:     
                 os.system("amixer set Master 5%+")

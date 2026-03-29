@@ -25,9 +25,50 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
+def speak(text):
+    """Voice output via espeak."""
+    print(f"🔊 HAZEL: {text}")
+    os.system(f"espeak -ven+f3 -s120 -p50 {shlex.quote(text)} 2>/dev/null")
+
+def run_interactive_revision(material_id):
+    """Fetches and recites questions for a revision session."""
+    speak("Entering Interactive Revise Mode. I will read your questions one by one. Take your time to think or answer out loud.")
+    time.sleep(2)
+    
+    questions = db.get_revision_questions(material_id)
+    if not questions:
+        speak("I couldn't find any questions for this material. Please check your upload on the website.")
+        return
+
+    for idx, q in enumerate(questions):
+        speak(f"Question {idx + 1}: {q['question']}")
+        print(f"[REVISE] Waiting 10s for response to: {q['question'][:30]}...")
+        time.sleep(10) # 10 second interactive delay
+    
+    speak("That was the last question. Well done on your revision session.")
+
 def main():
     global current_session_id
     
+    # 1. IDENTIFY SESSION & CONFIG
+    print("🚦 Fetching Session Details from Database...")
+    session = db.get_active_session()
+    
+    if not session:
+        print("⚠️ No remote session found. Creating local fallback session.")
+        current_session_id = db.start_study_session(duration_min=60, focus_goal="Local Focus Session")
+        session = {"phone_detection_enabled": True, "focus_goal": "Local Focus Session"}
+    else:
+        current_session_id = session['id']
+        print(f"✅ Synced with Web Session: {current_session_id}")
+
+    # 2. DECIDE MODE: REVISE vs STANDARD
+    is_revise = False
+    material_id = None
+    if session.get('focus_goal') and session['focus_goal'].startswith("REVISE:"):
+        is_revise = True
+        material_id = session['focus_goal'].replace("REVISE:", "")
+
     # --- INITIALIZE SERIAL FOR ESP1 (BASE STATION) ---
     try:
         esp1 = serial.Serial('/dev/ttyAMA0', 115200, timeout=0.01)
@@ -36,82 +77,73 @@ def main():
         print(f"❌ Serial Error: {e}")
         esp1 = None
 
-    # --- CAMERA SETUP ---
-    picam2 = Picamera2()
-    # Main stream for detection, main stream also needs to be compatible with Picamera2 capture_array 
-    config = picam2.create_preview_configuration(main={'size': (640, 480)})
-    picam2.configure(config)
-    picam2.start()
-    
-    # --- AUDIO SETUP ---
-    pygame.mixer.init()
-    ft_alarm_path = os.path.join(SCRIPT_DIR, "Alarm_Sound_FT.mp3")
-    pygame.mixer.music.load(ft_alarm_path)
+    # --- BRANCH LOGIC ---
+    if is_revise:
+        # PATH A: INTERACTIVE REVISION (Oral Tutoring)
+        run_interactive_revision(material_id)
+    else:
+        # PATH B: STANDARD STUDY (Focus Tracking)
+        # --- CAMERA SETUP ---
+        picam2 = Picamera2()
+        config = picam2.create_preview_configuration(main={'size': (640, 480)})
+        picam2.configure(config)
+        picam2.start()
+        
+        # --- AUDIO SETUP ---
+        pygame.mixer.init()
+        ft_alarm_path = os.path.join(SCRIPT_DIR, "Alarm_Sound_FT.mp3")
+        pygame.mixer.music.load(ft_alarm_path)
 
-    # --- START SESSION INSTANCE ---
-    print("🚦 Initializing Study Instance in Database...")
-    current_session_id = db.start_study_session(duration_min=60, focus_goal="Direct DB Focus")
-
-    if not current_session_id:
-        print("⚠️ Warning: Failed to create session in DB. Sentinel will continue locally.")
-
-    print(f"🚀 Hazel Sentinel ACTIVE. (Session UUID: {current_session_id})")
-
-    # Tracking
-    last_ui_update = 0
-    distraction_cooldown = 0 
-
-    try:
-        while True:
-            # 1. READ CLOUD CONFIG (Mailbox - potentially still updated by DB sync worker)
-            # The UI logic (T:XX) remains in the main_controller or sync worker
-            
-            # 2. COMPUTER VISION DETECTION (YOLO & MediaPipe)
-            frame_raw = picam2.capture_array()
-            if frame_raw is None: continue
-            frame = cv2.cvtColor(frame_raw, cv2.COLOR_BGRA2BGR)
-            
-            # 4a. Focus/Drowsiness Tracking
-            drowsy = Focus_Tracking.is_drowsy(frame)
-            
-            # 4b. Phone Detection
-            phone = Phone_Detection.detect_phone(frame)
-
-            # 3. DISTRACTION ALERT & DB LOGGING
-            if (drowsy or phone) and time.time() > distraction_cooldown:
-                print(f"⚠️ Distraction Trace: Drowsy={drowsy}, Phone={phone}")
-                if esp1: esp1.write(b"A:1\n") # Red LEDs + Peppermint
-                # play alarm
-                if not pygame.mixer.music.get_busy():
-                    pygame.mixer.music.play()
+        print(f"🚀 Hazel Sentinel ACTIVE (Phone Detection: {session['phone_detection_enabled']})")
+        
+        distraction_cooldown = 0
+        try:
+            while True:
+                frame_raw = picam2.capture_array()
+                if frame_raw is None: continue
+                frame = cv2.cvtColor(frame_raw, cv2.COLOR_BGRA2BGR)
                 
-                # DIRECT DB INSERT (No API headache)
-                if current_session_id:
+                # Check Drowsiness
+                drowsy = Focus_Tracking.is_drowsy(frame)
+                
+                # Check Phone (ONLY if enabled in web config)
+                phone = False
+                if session['phone_detection_enabled']:
+                    phone = Phone_Detection.detect_phone(frame)
+
+                # Distraction Alert & DB Logging
+                if (drowsy or phone) and time.time() > distraction_cooldown:
+                    print(f"⚠️ Distraction Trace: Drowsy={drowsy}, Phone={phone}")
+                    if esp1: esp1.write(b"A:1\n") 
+                    if not pygame.mixer.music.get_busy():
+                        pygame.mixer.music.play()
+                    
+                    # LOG TO DB FOR WEB CHARTS
                     d_type = "PHONE" if phone else "DROWSINESS"
                     db.log_distraction(current_session_id, d_type)
-                
-                distraction_cooldown = time.time() + 30
-            elif not (drowsy or phone) and time.time() < (distraction_cooldown - 28):
-                # Reset alarm after at least 2 seconds of good behavior
-                if esp1: esp1.write(b"A:0\n")
-                pygame.mixer.music.stop()
+                    
+                    distraction_cooldown = time.time() + 30
+                elif not (drowsy or phone) and time.time() < (distraction_cooldown - 28):
+                    if esp1: esp1.write(b"A:0\n")
+                    pygame.mixer.music.stop()
 
-            # OpenCV waitKey is needed for internal processing
-            cv2.waitKey(1)
-            
-    except Exception as e:
-        print(f"\n❌ Sentinel Error: {e}")
-    finally:
-        print("Releasing Study Mode hardware...")
-        if current_session_id:
-            db.end_study_session(current_session_id)
-        if esp1: 
-            try:
-                esp1.write(b"A:0\n")
-                esp1.write(b"T:0\n")
-                esp1.close()
-            except: pass
-        picam2.stop()
+                cv2.waitKey(1)
+        except Exception as e:
+            print(f"\n❌ Sentinel Error: {e}")
+        finally:
+            picam2.stop()
+
+    # --- FINAL CLEANUP ---
+    print("Releasing Study Mode hardware...")
+    if current_session_id:
+        db.end_study_session(current_session_id)
+    if esp1: 
+        try:
+            esp1.write(b"A:0\n")
+            esp1.write(b"T:0\n")
+            esp1.close()
+        except: pass
 
 if __name__ == "__main__":
+    import shlex
     main()
