@@ -2,24 +2,18 @@ import os
 import sys
 import threading
 import time
-import requests
+import time
 import json
 import shlex
+
+# Add parent directory to path so we can import from hazel_services
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'hazel_services'))
+from db_manager import DBManager
 
 import speech_recognition as sr
 import vlc
 import yt_dlp
 from ytmusicapi import YTMusic
-
-# --- CONFIGURATION (Synced with db_sync_worker) ---
-API_BASE_URL = "https://hazel-ten-psi.vercel.app/api"
-MUSIC_API_URL = f"{API_BASE_URL}/music/state"
-ROBOT_SECRET = "2a81692c-ccab-4deb-954c-63c6c0c7b08c" 
-
-HEADERS = {
-    "Content-Type": "application/json",
-    "x-robot-secret": ROBOT_SECRET
-}
 
 def speak(text):
     """Uses espeak for Raspberry Pi voice feedback."""
@@ -28,6 +22,7 @@ def speak(text):
 
 class SpotifyClone:
     def __init__(self):
+        self.db = DBManager()
         self.yt = YTMusic()
         self.instance = vlc.Instance()
         self.player = self.instance.media_player_new()
@@ -44,49 +39,50 @@ class SpotifyClone:
         threading.Thread(target=self._poll_server_commands, daemon=True).start()
 
     def _poll_server_commands(self):
+        """Polls the database MusicState directly instead of using a web API."""
         while True:
             try:
-                # Get Dashboard commands using Security Headers
-                res = requests.get(MUSIC_API_URL, headers=HEADERS, timeout=2)
-                if res.status_code == 200:
-                    state = res.json()
-                    if state.get("command"):
-                        cmd = state["command"]
-                        if cmd == "next": self.play_next()
-                        elif cmd == "play_pause": self.toggle_pause()
-                        elif cmd == "previous": self.play_previous()
-                        elif cmd == "enqueue_song":
-                            song = state.get("song")
-                            if song:
-                                yt_song = {
-                                    "title": song.get("title", "Unknown"),
-                                    "videoId": song.get("videoId"),
-                                    "artists": [{"name": song.get("artist", "")}],
-                                    "thumbnails": [{"url": song.get("thumbnail", "")}],
-                                }
-                                self.queue.append(yt_song)
-                                if not self.is_playing: self.play_next()
-                                else: speak(f"Added {song.get('title')} to the queue")
+                # 1. Check for incoming Dashboard commands directly in DB
+                state = self.db.get_music_state()
+                if state and state.get("command"):
+                    cmd = state["command"]
+                    if cmd == "next": self.play_next()
+                    elif cmd == "play_pause": self.toggle_pause()
+                    elif cmd == "previous": self.play_previous()
+                    elif cmd == "enqueue_song":
+                        song = state.get("song") # This is already a dict from JSON field
+                        if song:
+                            yt_song = {
+                                "title": song.get("title", "Unknown"),
+                                "videoId": song.get("videoId"),
+                                "artists": [{"name": song.get("artist", "")}],
+                                "thumbnails": [{"url": song.get("thumbnail", "")}],
+                            }
+                            self.queue.append(yt_song)
+                            if not self.is_playing: self.play_next()
+                            else: speak(f"Added {song.get('title')} to the queue")
 
-                        # Clear command after execution
-                        requests.post(MUSIC_API_URL, json={"clearCommand": True}, headers=HEADERS)
+                    # 2. Clear command directly in DB
+                    self.db.clear_music_command()
 
-                # Sync current playback status to the Cloud/DB
+                # 3. Push current playback status directly to DB
                 if self.current_song:
                     current_t = max(0, self.player.get_time() / 1000)
                     total_t = max(0, self.player.get_length() / 1000)
-                    requests.post(MUSIC_API_URL, headers=HEADERS, json={
-                        "nowPlaying": {
-                            "title": self.current_song.get("title", "Unknown"),
-                            "artist": self.current_song.get("artists", [{"name": "Unknown"}])[0]["name"],
-                            "videoId": self.current_song.get("videoId"),
-                            "thumbnail": self.current_song.get("thumbnails", [{"url": ""}])[0]["url"] if self.current_song.get("thumbnails") else "",
-                            "currentTime": current_t,
-                            "totalTime": total_t,
-                        },
-                        "queue": [{"title": s["title"]} for s in self.queue],
-                    }, timeout=2)
-            except Exception: pass
+                    
+                    nowPlaying = {
+                        "title": self.current_song.get("title", "Unknown"),
+                        "artist": self.current_song.get("artists", [{"name": "Unknown"}])[0]["name"],
+                        "videoId": self.current_song.get("videoId"),
+                        "thumbnail": self.current_song.get("thumbnails", [{"url": ""}])[0]["url"] if self.current_song.get("thumbnails") else "",
+                        "currentTime": current_t,
+                        "totalTime": total_t,
+                    }
+                    queue_simple = [{"title": s["title"]} for s in self.queue]
+                    self.db.update_music_state(nowPlaying, queue_simple)
+
+            except Exception as e:
+                print(f"📡 Sync Error: {e}")
             time.sleep(2)
 
     def _update_progress_bar(self):
@@ -162,17 +158,39 @@ class SpotifyClone:
         if self.current_song: self.history.append(self.current_song)
         self.current_song = self.queue.pop(0)
         self._play_current_song()
+        self.sync_state()
 
     def play_previous(self):
         if self.history:
             self.queue.insert(0, self.current_song)
             self.current_song = self.history.pop()
             self._play_current_song()
+            self.sync_state()
 
     def toggle_pause(self):
         self.player.pause()
         time.sleep(0.2)
         self.is_playing = self.player.is_playing()
+        self.sync_state()
+
+    def sync_state(self):
+        """Manually triggers a push of the current state to the database."""
+        if self.current_song:
+            try:
+                current_t = max(0, self.player.get_time() / 1000)
+                total_t = max(0, self.player.get_length() / 1000)
+                
+                nowPlaying = {
+                    "title": self.current_song.get("title", "Unknown"),
+                    "artist": self.current_song.get("artists", [{"name": "Unknown"}])[0]["name"],
+                    "videoId": self.current_song.get("videoId"),
+                    "thumbnail": self.current_song.get("thumbnails", [{"url": ""}])[0]["url"] if self.current_song.get("thumbnails") else "",
+                    "currentTime": current_t,
+                    "totalTime": total_t,
+                }
+                queue_simple = [{"title": s["title"]} for s in self.queue]
+                self.db.update_music_state(nowPlaying, queue_simple)
+            except Exception: pass
 
     def _on_song_end(self, event):
         threading.Thread(target=self.play_next).start()

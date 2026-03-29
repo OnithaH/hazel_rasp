@@ -3,6 +3,7 @@ from psycopg2.extras import RealDictCursor
 import time
 import uuid
 import os
+import json
 
 # --- SECURE CONFIGURATION LOADING ---
 # We load these from a local .env file on the Pi that is NEVER pushed to GitHub.
@@ -207,6 +208,52 @@ class DBManager:
         except Exception as e:
             print(f"⚠️ get_robot_mode Error: {e}")
         return "GENERAL"
+
+    # --- MUSIC DASHBOARD SYNC (Direct DB) ---
+    def get_music_state(self):
+        """Fetches the current MusicState for this robot (commands and songs)."""
+        rid = self.get_robot_id()
+        if not rid: return None
+        
+        try:
+            if not self.conn or self.conn.closed: self._connect()
+            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute('SELECT command, song FROM "MusicState" WHERE robot_id = %s', (rid,))
+                return cur.fetchone()
+        except Exception as e:
+            print(f"⚠️ get_music_state Error: {e}")
+        return None
+
+    def update_music_state(self, now_playing, queue):
+        """Pushes current playback state and queue directly to the MusicState table."""
+        rid = self.get_robot_id()
+        if not rid: return
+        
+        try:
+            if not self.conn or self.conn.closed: self._connect()
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE "MusicState" SET "nowPlaying" = %s, queue = %s, updated_at = NOW() '
+                    'WHERE robot_id = %s',
+                    (json.dumps(now_playing), json.dumps(queue), rid)
+                )
+        except Exception as e:
+            print(f"⚠️ update_music_state Error: {e}")
+
+    def clear_music_command(self):
+        """Clears any pending music commands after they've been executed."""
+        rid = self.get_robot_id()
+        if not rid: return
+        
+        try:
+            if not self.conn or self.conn.closed: self._connect()
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE "MusicState" SET command = NULL, song = NULL WHERE robot_id = %s',
+                    (rid,)
+                )
+        except Exception as e:
+            print(f"⚠️ clear_music_command Error: {e}")
 
 if __name__ == "__main__":
     # Diagnostic connectivity test

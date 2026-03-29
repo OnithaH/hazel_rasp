@@ -150,7 +150,7 @@ try:
                     current_active_mode = "Game"
                     last_mode_change_time = now
                 elif cmd == "MODE_MUSIC" and current_active_mode != "Music":
-                    run_program("music_mode/music_mode.py", ENV_MUSIC, True, False, "Music")
+                    run_program("music_mode/gesture_music_bridge.py", ENV_MUSIC, True, False, "Music")
                     current_active_mode = "Music"
                     last_mode_change_time = now
             except Exception as e:
