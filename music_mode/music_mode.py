@@ -77,6 +77,7 @@ class SpotifyClone:
                         "thumbnail": self.current_song.get("thumbnails", [{"url": ""}])[0]["url"] if self.current_song.get("thumbnails") else "",
                         "currentTime": current_t,
                         "totalTime": total_t,
+                        "isPlaying": self.is_playing,
                     }
                     queue_simple = [{"title": s["title"]} for s in self.queue]
                     self.db.update_music_state(nowPlaying, queue_simple)
@@ -187,6 +188,7 @@ class SpotifyClone:
                     "thumbnail": self.current_song.get("thumbnails", [{"url": ""}])[0]["url"] if self.current_song.get("thumbnails") else "",
                     "currentTime": current_t,
                     "totalTime": total_t,
+                    "isPlaying": self.is_playing,
                 }
                 queue_simple = [{"title": s["title"]} for s in self.queue]
                 self.db.update_music_state(nowPlaying, queue_simple)
