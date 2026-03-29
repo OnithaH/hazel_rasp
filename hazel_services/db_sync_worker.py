@@ -12,9 +12,10 @@ STATUS_FILE = "/tmp/hazel_sensor_data.json"  # Mailbox for Robot -> Web
 db = DBManager()
 last_session_check = 0 
 last_known_session_id = None # Memory for state-change detection
+last_known_mode = "GENERAL"  # Memory for global state-change detection
 
 def sync():
-    global last_session_check, last_known_session_id
+    global last_session_check, last_known_session_id, last_known_mode
     try:
         # 1. SEND TELEMETRY (Robot -> DB)
         if os.path.exists(STATUS_FILE):
