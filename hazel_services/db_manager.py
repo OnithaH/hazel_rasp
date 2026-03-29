@@ -189,6 +189,21 @@ class DBManager:
             print(f"⚠️ poll_aroma Error: {e}")
         return None
 
+    def get_robot_mode(self):
+        """Fetch the currently active operating mode from the Robot table."""
+        rid = self.get_robot_id()
+        if not rid: return "GENERAL"
+        
+        try:
+            if not self.conn or self.conn.closed: self._connect()
+            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute('SELECT mode FROM "Robot" WHERE id = %s', (rid,))
+                res = cur.fetchone()
+                return res['mode'] if res else "GENERAL"
+        except Exception as e:
+            print(f"⚠️ get_robot_mode Error: {e}")
+        return "GENERAL"
+
 if __name__ == "__main__":
     # Diagnostic connectivity test
     mgr = DBManager()

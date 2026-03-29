@@ -110,10 +110,14 @@ run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs
 
 # --- 5. MAIN LOOP ---
 current_active_mode = "General"
+last_mode_change_time = 0
+MODE_SWITCH_COOLDOWN = 3.0 # Guard timer
+
 try:
     last_sync = 0
     last_dht_request = 0
     while True:
+        now = time.time()
         # A. Telemetry & Battery Safety (Every 10s)
         current_v = get_voltage()
         
@@ -140,6 +144,14 @@ try:
                 elif cmd == "MODE_GENERAL" and current_active_mode != "General":
                     run_program("general_mode/general_mode.py", ENV_GENERAL, True, False, "General")
                     current_active_mode = "General"
+                    last_mode_change_time = now
+                elif cmd == "MODE_GAME" and current_active_mode != "Game":
+                    run_program("game_mode/main.py", ENV_GAME, False, False, "Game")
+                    current_active_mode = "Game"
+                    last_mode_change_time = now
+                elif cmd == "MODE_MUSIC" and current_active_mode != "Music":
+                    run_program("music_mode/music_mode.py", ENV_MUSIC, True, False, "Music")
+                    current_active_mode = "Music"
                     last_mode_change_time = now
             except Exception as e:
                 print(f"⚠️ Remote Cmd Error: {e}")
