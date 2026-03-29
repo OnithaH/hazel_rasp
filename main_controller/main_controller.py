@@ -155,7 +155,7 @@ try:
                 current_active_mode = "Study"
             
             elif "MODE_GAME" in raw and current_active_mode != "Game":  
-                run_program("game_mode/Games_combined.py", ENV_GAME, False, False, "Game")
+                run_program("game_mode/main.py", ENV_GAME, False, False, "Game")
                 current_active_mode = "Game"
             
             elif "MODE_MUSIC" in raw and current_active_mode != "Music": 
