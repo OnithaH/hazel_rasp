@@ -2,6 +2,7 @@
 MAIN ENTRY POINT - Launches the game launcher and handles game switching
 """
 
+import os
 import sys
 import time
 import pygame
@@ -9,6 +10,9 @@ from camera_manager import get_camera, release_camera
 from game_launcher import run_launcher
 import find_my_home
 import puzzle_escape
+
+# Add parent directory to path to allow importing hazel_services
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from hazel_services.db_manager import DBManager
 
 def set_camera_for_games(camera):
