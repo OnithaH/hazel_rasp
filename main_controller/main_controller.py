@@ -111,12 +111,16 @@ run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs
 # --- 5. MAIN LOOP ---
 try:
     last_sync = 0
+    last_dht_request = 0
     while True:
         # A. Telemetry & Battery Safety (Every 10s)
         current_v = get_voltage()
-        if time.time() - last_sync > 10:
-            print(f"🔋 Battery: {current_v}V")
-            last_sync = time.time()
+        # SILENCED: print(f"🔋 Battery: {current_v}V")
+        
+        # Poll DHT every 30s
+        if time.time() - last_dht_request > 30:
+            if ser: ser.write(b'd') 
+            last_dht_request = time.time()
 
         if 0.1 < current_v < 6.4: # Shutdown for 2S Li-ion
             ser.write(b'0') # JBL OFF
@@ -143,6 +147,21 @@ try:
             
             elif "Vol down" in raw:   
                 os.system("amixer set Master 5%-")
+            
+            # C. Parse DHT Telemetry
+            elif "T:" in raw:
+                try:
+                    # Example: T:24.5 H:60.2
+                    parts = raw.split()
+                    temp = float(parts[0].replace("T:", ""))
+                    humid = float(parts[1].replace("H:", ""))
+                    
+                    # Store in Mailbox for DB Sync Worker
+                    data = {"temperature": temp, "humidity": humid}
+                    with open("/tmp/hazel_sensor_data.json", "w") as f:
+                        json.dump(data, f)
+                except Exception as e:
+                    print(f"⚠️ Telemetry Parse Error: {e}")
 
         time.sleep(0.01)
 

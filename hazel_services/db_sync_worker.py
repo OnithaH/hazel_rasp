@@ -5,7 +5,6 @@ from db_manager import DBManager
 
 # --- CONFIGURATION ---
 CHECK_INTERVAL = 5  # Polling every 5s
-
 CMD_FILE    = "/tmp/hazel_web_cmd.txt"       # Mailbox for Web -> Robot
 STATUS_FILE = "/tmp/hazel_sensor_data.json"  # Mailbox for Robot -> Web
 
@@ -25,7 +24,7 @@ def sync():
             
             # Direct SQL Insert
             db.log_environment(temp, humid)
-            print(f"🌡️  Telemetry Synced: {temp}°C, {humid}%")
+            print(f"🌡️  TELEMETRY SYNCED: {temp}°C, {humid}% (Uploaded to Database)")
 
         # 2. GET COMMANDS (DB -> Robot)
         active_scent = db.poll_aroma_commands()
