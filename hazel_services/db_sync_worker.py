@@ -17,18 +17,18 @@ last_known_mode = "GENERAL"  # Memory for global state-change detection
 def sync():
     global last_session_check, last_known_session_id, last_known_mode
     try:
-        # 1. SEND TELEMETRY (Robot -> DB)
-        if os.path.exists(STATUS_FILE):
-            with open(STATUS_FILE, "r") as f:
-                payload = json.load(f)
-            
-            # Extract temp/humid from the mailbox file
-            temp = payload.get("temperature", 0.0)
-            humid = payload.get("humidity", 0.0)
-            
-            # Direct SQL Insert
-            db.log_environment(temp, humid)
-            print(f"🌡️  TELEMETRY SYNCED: {temp}°C, {humid}% (Uploaded to Database)")
+        # 1. SEND TELEMETRY (Robot -> DB) - DISABLED PER USER REQUEST
+        # if os.path.exists(STATUS_FILE):
+        #     with open(STATUS_FILE, "r") as f:
+        #         payload = json.load(f)
+        #     
+        #     # Extract temp/humid from the mailbox file
+        #     temp = payload.get("temperature", 0.0)
+        #     humid = payload.get("humidity", 0.0)
+        #     
+        #     # Direct SQL Insert
+        #     db.log_environment(temp, humid)
+        #     print(f"🌡️  TELEMETRY SYNCED: {temp}°C, {humid}% (Uploaded to Database)")
 
         # 2. GET COMMANDS (DB -> Robot)
         active_scent = db.poll_aroma_commands()
