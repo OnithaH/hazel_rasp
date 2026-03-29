@@ -3,8 +3,20 @@ from ultralytics import YOLO
 
 model = YOLO("yolov8n.pt") 
 detection_counter = 0
-
 is_alerting = False
+
+def detect_phone(frame):
+    """Refined interface for the master controller."""
+    global detection_counter
+    results = model(frame, verbose=False)[0]
+    has_phone = any(int(box.cls[0]) == 67 and float(box.conf[0]) > 0.2 for box in results.boxes)
+    if has_phone: 
+        detection_counter += 1
+        if detection_counter >= 3:
+            return True
+    else: 
+        detection_counter = 0
+    return False
 
 def process_frame(frame, alert_sound):
     global detection_counter, is_alerting

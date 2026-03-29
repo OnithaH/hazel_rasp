@@ -17,6 +17,26 @@ def get_head_pose(lms, w, h):
     center_eyes = np.array([(lms[33].x + lms[263].x)/2 * w, (lms[33].y + lms[263].y)/2 * h])
     return nose[0] - center_eyes[0], nose[1] - center_eyes[1]
 
+def is_drowsy(image):
+    """Refined interface for the master controller."""
+    global drowsy_start_time
+    h, w, _ = image.shape
+    results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    
+    if results.multi_face_landmarks:
+        lms = results.multi_face_landmarks[0].landmark
+        left_coords = [np.array([int(lms[i].x * w), int(lms[i].y * h)]) for i in LEFT_EYE]
+        right_coords = [np.array([int(lms[i].x * w), int(lms[i].y * h)]) for i in RIGHT_EYE]
+        avg_ear = (calculate_ear(left_coords) + calculate_ear(right_coords)) / 2.0
+        
+        if avg_ear < EAR_THRESHOLD:
+            if drowsy_start_time is None: drowsy_start_time = time.time()
+            if time.time() - drowsy_start_time >= 3.0:
+                return True
+        else: 
+            drowsy_start_time = None
+    return False
+
 def process_frame(image, music_loaded):
     global drowsy_start_time, away_start_time, is_alerting
     h, w, _ = image.shape

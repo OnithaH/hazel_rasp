@@ -136,6 +136,9 @@ try:
                 if cmd == "MODE_STUDY" and current_active_mode != "Study":
                     run_program("study_mode/Hazel_Integrated.py", ENV_STUDY, True, False, "Study")
                     current_active_mode = "Study"
+                elif cmd == "MODE_GENERAL" and current_active_mode != "General":
+                    run_program("general_mode/general_mode.py", ENV_GENERAL, True, False, "General")
+                    current_active_mode = "General"
             except Exception as e:
                 print(f"⚠️ Remote Cmd Error: {e}")
 

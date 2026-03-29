@@ -39,6 +39,21 @@ def sync():
             if os.path.exists(CMD_FILE):
                 os.remove(CMD_FILE)
 
+        # 3. WEB-COMMAND POLLING (Check for active Study sessions every 10s)
+        if time.time() - last_session_check > 10:
+            active_session = db.get_active_session()
+            if active_session:
+                print(f"📡 Web-Initiated Session Detected: {active_session['id']}")
+                # Signal main_controller to switch to STUDY mode
+                with open("/tmp/hazel_mode_cmd", "w") as f:
+                    f.write("MODE_STUDY")
+            else:
+                # If no session found, ensure we switch back to GENERAL if we were in STUDY
+                # The main_controller is smart enough not to loop if it's already in General
+                with open("/tmp/hazel_mode_cmd", "w") as f:
+                    f.write("MODE_GENERAL")
+            last_session_check = time.time()
+
     except Exception as e:
         print(f"📡 Sync Error: {e}")
 

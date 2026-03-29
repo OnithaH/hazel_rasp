@@ -55,9 +55,9 @@ def main():
     session = db.get_active_session()
     
     if not session:
-        print("⚠️ No remote session found. Creating local fallback session.")
-        current_session_id = db.start_study_session(duration_min=60, focus_goal="Local Focus Session")
-        session = {"phone_detection_enabled": True, "focus_goal": "Local Focus Session"}
+        print("❌ No active Web Session found. The robot will not start a session.")
+        speak("I don't see an active session on the website yet. Please start one from your dashboard.")
+        return # Exit without creating any session records
     else:
         current_session_id = session['id']
         print(f"✅ Synced with Web Session: {current_session_id}")
