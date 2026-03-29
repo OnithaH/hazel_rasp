@@ -541,6 +541,8 @@ def run_find_my_home():
     level_map = LEVELS[current_level]
     px, py = find_start(level_map)
     player = Player(px, py, level_map)
+    game_start_time = time.time()
+    final_result = "Quit"
     start_time = time.time()
     won = False
     win_time = 0
@@ -600,8 +602,9 @@ def run_find_my_home():
                                 ox_m = (SCREEN_W - len(level_map[0])*TILE)//2
                                 oy_m = (SCREEN_H - len(level_map)*TILE)//2 + 10
                                 emit_particles(player.tx + TILE//2 + ox_m, player.ty + TILE//2 + oy_m, C_UI_GOLD)
-                                won = True
                                 win_time = int(time.time() - start_time)
+                                final_result = "Win"
+                                won = True
 
                     # 3. Draw Debug Window (Safe on Main Thread)
                     #frame = controller.draw_ui(frame, gesture, fingers)
@@ -670,8 +673,9 @@ def run_find_my_home():
                         oy_m = (SCREEN_H - len(level_map)*TILE) // 2 + 10
                         emit_particles(player.tx + TILE//2 + ox_m,
                                        player.ty + TILE//2 + oy_m, C_UI_GOLD)
-                        won = True
                         win_time = int(time.time() - start_time)
+                        final_result = "Win"
+                        won = True
         
         player.update(dt)
         particles[:] = [p for p in particles if p.update(dt)]
@@ -696,10 +700,19 @@ def run_find_my_home():
         pygame.display.flip()
     
     #gesture_thread_running[0] = False
+    # Calculate final stats
+    final_duration = int(time.time() - game_start_time)
+    results = {
+        "score": 100 if final_result == "Win" else 0, # Placeholder score logic
+        "duration": final_duration,
+        "result": final_result
+    }
+    
     if controller:
         controller.release()
     cv2.destroyAllWindows()
     time.sleep(1)
+    return results
 
 if __name__ == "__main__":
     run_find_my_home()

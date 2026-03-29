@@ -807,6 +807,8 @@ class Game:
         print("     🤚 NOW WITH GESTURE CONTROL! 🤚")
         print("="*70)
         
+        game_start_time = time.time()
+        final_result = "Quit"
         running = True
         frame_skip = 0
         while running:
@@ -845,19 +847,30 @@ class Game:
                     else:
                         self.handle_input(event.key)
             
-            self.handle_gestures()
-            self.update()
-            self.draw()
+            if self.state == WON:
+                final_result = "Win"
+            elif self.state == LOST:
+                final_result = "Loss"
+                
             self.clock.tick(FPS)
+        
+        # Calculate final stats
+        final_duration = int(time.time() - game_start_time)
+        results = {
+            "score": self.total_score,
+            "duration": final_duration,
+            "result": final_result
+        }
         
         self.gesture_running[0] = False
         if self.controller:
             self.controller.release()
         cv2.destroyAllWindows()
+        return results
 
 def run_puzzle_escape():
     game = Game()
-    game.run()
+    return game.run()
 
 if __name__ == "__main__":
     run_puzzle_escape()

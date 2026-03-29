@@ -262,6 +262,24 @@ class DBManager:
         except Exception as e:
             print(f"⚠️ clear_music_command Error: {e}")
 
+    def log_game_session(self, activity_type, game_name, duration, score=None, result=None):
+        """Inserts a new game session record into the database."""
+        rid = self.get_robot_id()
+        if not rid: return
+        
+        try:
+            if not self.conn or self.conn.closed: self._connect()
+            session_id = str(uuid.uuid4())
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    'INSERT INTO "GameSession" (id, robot_id, activity_type, game_name, duration, score, result, played_at) '
+                    'VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())',
+                    (session_id, rid, activity_type, game_name, int(duration), score, result)
+                )
+            print(f"💾 Game session synced: {game_name} | Score: {score} | Result: {result}")
+        except Exception as e:
+            print(f"⚠️ log_game_session Error: {e}")
+
 if __name__ == "__main__":
     # Diagnostic connectivity test
     mgr = DBManager()

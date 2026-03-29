@@ -9,6 +9,7 @@ from camera_manager import get_camera, release_camera
 from game_launcher import run_launcher
 import find_my_home
 import puzzle_escape
+from hazel_services.db_manager import DBManager
 
 def set_camera_for_games(camera):
     """Set camera for all games"""
@@ -31,6 +32,7 @@ def main():
         # Get camera ONCE at the start
         camera = get_camera()
         set_camera_for_games(camera)
+        db = DBManager()
 
         while True:
             # Run launcher (Camera stays active in background)
@@ -40,10 +42,14 @@ def main():
             
             if choice == 0:
                 print("🎮 LAUNCHING: FIND MY HOME")
-                find_my_home.run_find_my_home()
+                results = find_my_home.run_find_my_home()
+                if results:
+                    db.log_game_session("GAME", "Find My Home", results['duration'], results['score'], results['result'])
             else:
                 print("🎮 LAUNCHING: PUZZLE ESCAPE")
-                puzzle_escape.run_puzzle_escape()
+                results = puzzle_escape.run_puzzle_escape()
+                if results:
+                    db.log_game_session("GAME", "Puzzle Escape", results['duration'], results['score'], results['result'])
             
             print("\nReturning to launcher...")
             time.sleep(1) # Short buffer
