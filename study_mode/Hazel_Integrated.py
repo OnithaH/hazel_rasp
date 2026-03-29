@@ -47,6 +47,8 @@ def run_interactive_revision(material_id):
         speak(f"Question {idx + 1}: {q['question']}")
         print(f"[REVISE] Waiting 10s for response to: {q['question'][:30]}...")
         time.sleep(10) # 10 second interactive delay
+        speak(f"The correct answer is: {q['answer']}")
+        time.sleep(2) # Short pause before next question
     
     speak("That was the last question. Well done on your revision session.")
 
