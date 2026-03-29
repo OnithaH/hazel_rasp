@@ -127,7 +127,7 @@ try:
             os.system("sudo shutdown now")
 
         # B. Check Remote Web Commands (From db_sync_worker)
-        if os.path.exists("/tmp/hazel_mode_cmd"):
+        if os.path.exists("/tmp/hazel_mode_cmd") and (now - last_mode_change_time > MODE_SWITCH_COOLDOWN):
             try:
                 with open("/tmp/hazel_mode_cmd", "r") as f:
                     cmd = f.read().strip()
@@ -136,9 +136,11 @@ try:
                 if cmd == "MODE_STUDY" and current_active_mode != "Study":
                     run_program("study_mode/Hazel_Integrated.py", ENV_STUDY, True, False, "Study")
                     current_active_mode = "Study"
+                    last_mode_change_time = now
                 elif cmd == "MODE_GENERAL" and current_active_mode != "General":
                     run_program("general_mode/general_mode.py", ENV_GENERAL, True, False, "General")
                     current_active_mode = "General"
+                    last_mode_change_time = now
             except Exception as e:
                 print(f"⚠️ Remote Cmd Error: {e}")
 
@@ -146,29 +148,15 @@ try:
         if ser and ser.in_waiting > 0:
             raw = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
             
-            if "MODE_GENERAL" in raw and current_active_mode != "General": 
-                run_program("general_mode/general_mode.py", ENV_GENERAL, True, False, "General")
-                current_active_mode = "General"
-            
-            elif "MODE_STUDY" in raw and current_active_mode != "Study": 
-                run_program("study_mode/Hazel_Integrated.py", ENV_STUDY, True, False, "Study")
-                current_active_mode = "Study"
-            
-            elif "MODE_GAME" in raw and current_active_mode != "Game":  
-                run_program("game_mode/main.py", ENV_GAME, False, False, "Game")
-                current_active_mode = "Game"
-            
-            elif "MODE_MUSIC" in raw and current_active_mode != "Music": 
-                run_program("music_mode/music_mode.py", ENV_MUSIC, True, False, "Music")
-                current_active_mode = "Music"
-            
-            elif "Vol up" in raw:     
+            # --- MODE BUTTONS DISABLED PER USER REQUEST ---
+            # (Stops ghost-switch interference/yapping loops)
+            if "Vol up" in raw:     
                 os.system("amixer set Master 5%+")
             
             elif "Vol down" in raw:   
                 os.system("amixer set Master 5%-")
             
-            # C. Parse DHT Telemetry
+            # C. Parse DHT Telemetry (Keep active for health monitoring)
             elif "T:" in raw:
                 try:
                     # Example: T:24.5 H:60.2
