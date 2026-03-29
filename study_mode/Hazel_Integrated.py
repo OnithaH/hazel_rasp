@@ -112,41 +112,73 @@ def main():
         
         # --- AUDIO SETUP ---
         pygame.mixer.init()
+        # Separate channels for different alerts if needed, but simple music/channel is fine
         ft_alarm_path = os.path.join(SCRIPT_DIR, "Alarm_Sound_FT.mp3")
-        pygame.mixer.music.load(ft_alarm_path)
+        pd_alarm_path = os.path.join(SCRIPT_DIR, "Alarm_Sound_PD.mp3")
+        
+        # Load sounds as objects instead of just music for better control
+        ft_sound = pygame.mixer.Sound(ft_alarm_path)
+        pd_sound = pygame.mixer.Sound(pd_alarm_path)
 
         print(f"🚀 Hazel Sentinel ACTIVE (Phone Detection: {session['phone_detection_enabled']})")
         
-        distraction_cooldown = 0
+        frame_count = 0
+        last_db_log_time = 0
+        current_alert_type = None # None, "FT", "PD"
         try:
             while True:
                 frame_raw = picam2.capture_array()
                 if frame_raw is None: continue
                 frame = cv2.cvtColor(frame_raw, cv2.COLOR_BGRA2BGR)
+                frame_count += 1
                 
-                # Check Drowsiness
-                drowsy = Focus_Tracking.is_drowsy(frame)
-                
-                # Check Phone (ONLY if enabled in web config)
+                # OPTIMIZATION: Check for drowsiness/phone every few frames to prevent lag
+                # This keeps the motion fluid and the robot responsive
+                drowsy = False
                 phone = False
-                if session['phone_detection_enabled']:
+                
+                # Check Drowsiness (Every 2nd frame)
+                if frame_count % 2 == 0:
+                    drowsy = Focus_Tracking.is_drowsy(frame)
+                
+                # Check Phone (Every 3rd frame, if enabled)
+                if session['phone_detection_enabled'] and frame_count % 3 == 0:
                     phone = Phone_Detection.detect_phone(frame)
 
-                # Distraction Alert & DB Logging
-                if (drowsy or phone) and time.time() > distraction_cooldown:
-                    print(f"⚠️ Distraction Trace: Drowsy={drowsy}, Phone={phone}")
-                    if esp1: esp1.write(b"A:1\n") 
-                    if not pygame.mixer.music.get_busy():
-                        pygame.mixer.music.play()
-                    
-                    # LOG TO DB FOR WEB CHARTS
-                    d_type = "PHONE" if phone else "DROWSINESS"
-                    db.log_distraction(current_session_id, d_type)
-                    
-                    distraction_cooldown = time.time() + 30
-                elif not (drowsy or phone) and time.time() < (distraction_cooldown - 28):
-                    if esp1: esp1.write(b"A:0\n")
-                    pygame.mixer.music.stop()
+                # --- ALERT LOGIC ---
+                now = time.time()
+                
+                # Priority 1: Phone Detection
+                if phone:
+                    if current_alert_type != "PD":
+                        pygame.mixer.stop() # Stop any current sound
+                        pd_sound.play(-1)
+                        current_alert_type = "PD"
+                        if esp1: esp1.write(b"A:1\n")
+                        
+                    # Log to DB (Throttle to once every 30s)
+                    if now - last_db_log_time > 30:
+                        db.log_distraction(current_session_id, "PHONE")
+                        last_db_log_time = now
+                
+                # Priority 2: Drowsiness
+                elif drowsy:
+                    if current_alert_type != "FT":
+                        pygame.mixer.stop()
+                        ft_sound.play(-1)
+                        current_alert_type = "FT"
+                        if esp1: esp1.write(b"A:1\n")
+                        
+                    if now - last_db_log_time > 30:
+                        db.log_distraction(current_session_id, "DROWSINESS")
+                        last_db_log_time = now
+                
+                # Clear Alerts
+                elif not (phone or drowsy):
+                    if current_alert_type is not None:
+                        pygame.mixer.stop()
+                        current_alert_type = None
+                        if esp1: esp1.write(b"A:0\n")
 
                 cv2.waitKey(1)
         except Exception as e:
