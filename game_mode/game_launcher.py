@@ -28,8 +28,11 @@ def run_launcher():
     Gesture-controlled launcher with fixed camera handling.
     Returns 0 = Find My Home, 1 = Puzzle Escape
     """
-    screen = pygame.display.set_mode((LAUNCH_W, LAUNCH_H))
-    pygame.display.set_caption("Game Launcher – Select a Game")
+    # The physical LCD display size
+    real_screen = pygame.display.set_mode((640, 480))
+    # The virtual surface where everything is actually drawn
+    screen = pygame.Surface((LAUNCH_W, LAUNCH_H))
+    pygame.display.set_caption("Game Launcher - Select a Game")
     clock = pygame.time.Clock()
 
     try:
@@ -68,9 +71,9 @@ def run_launcher():
     picam2 = get_camera()
     if picam2:
         controller.set_camera(picam2)
-        cv2.namedWindow('Gesture Control', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('Gesture Control', 640, 480)
-        cv2.moveWindow('Gesture Control', 100, 100)
+        #cv2.namedWindow('Gesture Control', cv2.WINDOW_NORMAL)
+        #cv2.resizeWindow('Gesture Control', 640, 480)
+        #cv2.moveWindow('Gesture Control', 100, 100)
     last_action_time = 0
     COOLDOWN = 0.6
 
@@ -169,9 +172,9 @@ def run_launcher():
                                 _last_gesture[0] = "LAUNCHING!"
                                 last_action_time = now
 
-                    frame = controller.draw_ui(frame, gesture, fingers)
-                    cv2.imshow("Gesture Control", frame)
-                    cv2.waitKey(1)
+                    #frame = controller.draw_ui(frame, gesture, fingers)
+                    #cv2.imshow("Gesture Control", frame)
+                    #cv2.waitKey(1)
             except Exception as e:
                 pass
 
@@ -315,6 +318,10 @@ def run_launcher():
                 time.sleep(1)
                 return launch_idx
                 
+        # Scale the virtual screen to physical LCD size
+        scaled_surf = pygame.transform.scale(screen, (640, 480))
+        real_screen.blit(scaled_surf, (0, 0))
+        
         pygame.display.flip()
         clock.tick(60)
 

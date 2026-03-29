@@ -263,8 +263,9 @@ class Door:
 
 class Game:
     def __init__(self):
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("🧩 Puzzle Escape - 10 Levels! (Gesture Control)")
+        self.real_screen = pygame.display.set_mode((640, 480))
+        self.screen = pygame.Surface((WIDTH, HEIGHT))
+        pygame.display.set_caption(" Puzzle Escape - 10 Levels! (Gesture Control)")
         self.clock = pygame.time.Clock()
         
         self.font = pygame.font.Font(None, 22)
@@ -292,9 +293,9 @@ class Game:
                 
                 self.controller = GestureController()
                 self.controller.set_camera(self.picam2)
-                cv2.namedWindow('Gesture Control - Puzzle Escape', cv2.WINDOW_NORMAL)
-                cv2.resizeWindow('Gesture Control - Puzzle Escape', 640, 480)
-                cv2.moveWindow('Gesture Control - Puzzle Escape', 100, 100)
+                #cv2.namedWindow('Gesture Control - Puzzle Escape', cv2.WINDOW_NORMAL)
+                #cv2.resizeWindow('Gesture Control - Puzzle Escape', 640, 480)
+                #cv2.moveWindow('Gesture Control - Puzzle Escape', 100, 100)
                 print("[PUZZLE ESCAPE] Gesture control ready")
                 
             except Exception as e:
@@ -320,12 +321,12 @@ class Game:
                     self.last_gesture[0] = gesture
                     self.last_gesture_time[0] = time.time()
                 
-                if self.controller:
-                    frame = self.controller.draw_ui(frame, gesture, fingers)
-                    cv2.putText(frame, "PUZZLE ESCAPE: SWIPE=MOVE | FIST=PICK | THUMB=SWITCH | PALM=DOOR | PEACE=RESTART",
-                                (8, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 255, 200), 1)
-                    cv2.imshow("Gesture Control - Puzzle Escape", frame)
-                    cv2.waitKey(1)
+                #if self.controller:
+                    #frame = self.controller.draw_ui(frame, gesture, fingers)
+                    #cv2.putText(frame, "PUZZLE ESCAPE: SWIPE=MOVE | FIST=PICK | THUMB=SWITCH | PALM=DOOR | PEACE=RESTART",
+                                #(8, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 255, 200), 1)
+                    #cv2.imshow("Gesture Control - Puzzle Escape", frame)
+                    #cv2.waitKey(1)
             except Exception as e:
                 pass
         
@@ -407,6 +408,11 @@ class Game:
         
         while not self.gesture_queue.empty():
             gesture = self.gesture_queue.get()
+            
+            if gesture == "quit":
+                pygame.event.post(pygame.event.Event(pygame.KEYDOWN, {'key': pygame.K_ESCAPE}))
+                continue 
+            # ------------------------------------
             
             if self.state == PLAYING:
                 if gesture == "swipe_left":
@@ -789,6 +795,10 @@ class Game:
             restart_text = self.font.render("Press R or show ✌️ PEACE gesture to try again", True, CUTE_YELLOW)
             self.screen.blit(restart_text, (WIDTH//2 - restart_text.get_width()//2, HEIGHT//2 + 70))
         
+        # Scale down before displaying
+        scaled_surf = pygame.transform.scale(self.screen, (640, 480))
+        self.real_screen.blit(scaled_surf, (0, 0))
+        
         pygame.display.flip()
 
     def run(self):
@@ -818,9 +828,9 @@ class Game:
                             self.last_gesture_time[0] = time.time()                        
                     
                         # Draw UI
-                        frame = self.controller.draw_ui(frame, gesture, fingers)
-                        cv2.imshow("Gesture Control - Puzzle Escape", frame)
-                        cv2.waitKey(1)
+                        #frame = self.controller.draw_ui(frame, gesture, fingers)
+                        #cv2.imshow("Gesture Control - Puzzle Escape", frame)
+                        #cv2.waitKey(1)
                 except Exception as e:
                     print(f"Camera Sync Error: {e}")
 

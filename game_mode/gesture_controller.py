@@ -167,7 +167,7 @@ class GestureController:
             elif current_pose == "peace":
                 return "restart"
             elif current_pose == "three_fingers":
-                return "restart"
+                return "quit"
             elif current_pose == "point":
                 return "next"
         

@@ -190,7 +190,8 @@ class Player:
         pygame.draw.rect(screen, (220,140,60), (pack_x-4, cy-6, 8,  6),  border_radius=2)
 
 def run_find_my_home():
-    screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+    real_screen = pygame.display.set_mode((640, 480))
+    screen = pygame.Surface((SCREEN_W, SCREEN_H))
     pygame.display.set_caption("✦ Find My Home ✦")
     clock = pygame.time.Clock()
     
@@ -214,9 +215,9 @@ def run_find_my_home():
         try:
             controller = GestureController()
             controller.set_camera(picam2)
-            cv2.namedWindow('Gesture Control - Find My Home', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Gesture Control - Find My Home', 640, 480)
-            cv2.moveWindow('Gesture Control - Find My Home', 100, 100)
+            #cv2.namedWindow('Gesture Control - Find My Home', cv2.WINDOW_NORMAL)
+            #cv2.resizeWindow('Gesture Control - Find My Home', 640, 480)
+            #cv2.moveWindow('Gesture Control - Find My Home', 100, 100)
             print("[FIND MY HOME] Gesture control ready")
         except Exception as e:
             print(f"[FIND MY HOME] Gesture setup error: {e}")
@@ -556,7 +557,11 @@ def run_find_my_home():
         dt = now - prev_time
         prev_time = now
         t_sec = now
-        mouse_pos = pygame.mouse.get_pos()
+        
+        # Get raw mouse position on the 640x480 screen
+        raw_mx, raw_my = pygame.mouse.get_pos()
+        # Scale mouse position up to match the 1100x750 logical space
+        mouse_pos = (int(raw_mx * (SCREEN_W / 640)), int(raw_my * (SCREEN_H / 480)))
         clock.tick(FPS)
 
         if picam2 and controller:
@@ -575,6 +580,10 @@ def run_find_my_home():
                         last_gesture[0] = gesture
                         last_gesture_time[0] = time.time()
                         current_detected_gesture[0] = gesture
+
+                        if gesture == "quit":
+                            pygame.event.post(pygame.event.Event(pygame.KEYDOWN, {'key': pygame.K_ESCAPE}))
+                        # ------------------------------------
                         
                         if not won and not player.moving:
                             moved = False
@@ -595,9 +604,9 @@ def run_find_my_home():
                                 win_time = int(time.time() - start_time)
 
                     # 3. Draw Debug Window (Safe on Main Thread)
-                    frame = controller.draw_ui(frame, gesture, fingers)
-                    cv2.imshow("Gesture Control - Find My Home", frame)
-                    cv2.waitKey(1)
+                    #frame = controller.draw_ui(frame, gesture, fingers)
+                    #cv2.imshow("Gesture Control - Find My Home", frame)
+                    #cv2.waitKey(1)
             except Exception as e:
                 print(f"Camera Sync Error: {e}")
                 
@@ -682,6 +691,8 @@ def run_find_my_home():
             btn1.draw(screen)
             btn2.draw(screen)
         
+        scaled_surf = pygame.transform.scale(screen, (640, 480))
+        real_screen.blit(scaled_surf, (0, 0))
         pygame.display.flip()
     
     #gesture_thread_running[0] = False
