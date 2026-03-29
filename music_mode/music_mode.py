@@ -2,7 +2,6 @@ import os
 import sys
 import threading
 import time
-import time
 import json
 import shlex
 
@@ -42,15 +41,28 @@ class SpotifyClone:
         """Polls the database MusicState directly instead of using a web API."""
         while True:
             try:
-                # 1. Check for incoming Dashboard commands directly in DB
+                # 1. Fetch Master State from DB
                 state = self.db.get_music_state()
-                if state and state.get("command"):
-                    cmd = state["command"]
+                if not state:
+                    time.sleep(2)
+                    continue
+
+                # 2. Check for queue updates/sync from Web (Source of Truth)
+                db_queue = state.get("queue")
+                if isinstance(db_queue, list) and len(db_queue) != len(self.queue):
+                    # If web added something or we are just starting, accept web's queue
+                    # We also accept if web is shorter (deletions)
+                    print(f"🔄 Queue Synced from Web ({len(db_queue)} songs total)")
+                    self.queue = db_queue
+
+                # 3. Process intentional Dashboard commands
+                cmd = state.get("command")
+                if cmd:
                     if cmd == "next": self.play_next()
                     elif cmd == "play_pause": self.toggle_pause()
                     elif cmd == "previous": self.play_previous()
                     elif cmd == "enqueue_song":
-                        song = state.get("song") # This is already a dict from JSON field
+                        song = state.get("song")
                         if song:
                             yt_song = {
                                 "title": song.get("title", "Unknown"),
@@ -58,37 +70,19 @@ class SpotifyClone:
                                 "artists": [{"name": song.get("artist", "")}],
                                 "thumbnails": [{"url": song.get("thumbnail", "")}],
                             }
+                            # Locally append first to avoid waiting for next poll
                             self.queue.append(yt_song)
                             if not self.is_playing: self.play_next()
                             else: 
                                 speak(f"Added {song.get('title')} to the queue")
-                                self.sync_state() # Immediate sync to update web queue
+                                self.sync_state()
 
-                    # 2. Check for queue deletions/reorderings from the Web
-                    db_queue = state.get("queue")
-                    if isinstance(db_queue, list) and len(db_queue) < len(self.queue):
-                        print(f"🔄 Syncing Queue from Web (Removed {len(self.queue) - len(db_queue)} songs)")
-                        self.queue = db_queue # Source of truth is now the Web/DB
-                    
-                    # 3. Clear command directly in DB
+                    # Clear command once processed
                     self.db.clear_music_command()
 
-                # 3. Push current playback status directly to DB
+                # 4. Push current playback status back to DB (Robot is Authority for nowPlaying)
                 if self.current_song:
-                    current_t = max(0, self.player.get_time() / 1000)
-                    total_t = max(0, self.player.get_length() / 1000)
-                    
-                    nowPlaying = {
-                        "title": self.current_song.get("title", "Unknown"),
-                        "artist": self.current_song.get("artists", [{"name": "Unknown"}])[0]["name"],
-                        "videoId": self.current_song.get("videoId"),
-                        "thumbnail": self.current_song.get("thumbnails", [{"url": ""}])[0]["url"] if self.current_song.get("thumbnails") else "",
-                        "currentTime": current_t,
-                        "totalTime": total_t,
-                        "isPlaying": self.is_playing,
-                    }
-                    # Send FULL objects back so Title/Artist aren't lost
-                    self.db.update_music_state(nowPlaying, self.queue)
+                    self.sync_state()
 
             except Exception as e:
                 print(f"📡 Sync Error: {e}")
