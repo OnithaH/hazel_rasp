@@ -10,6 +10,7 @@ import shlex  # Safely handles strings for system commands
 try:
     import smbus2
 except ImportError:
+    
     print("⚠️ smbus2 not found. Run: pip install smbus2")
 
 # --- 1. CONFIGURATION & PATHS ---
