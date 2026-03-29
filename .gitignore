@@ -1,0 +1,58 @@
+# --- Python & Virtual Environments ---
+**/venv/
+**/vnv/
+**/env/
+**/.env/
+**/ENV/
+**/bin/
+**/lib/
+**/include/
+**/share/
+**/pyvenv.cfg
+*.py[cod]
+*$py.class
+**/__pycache__/
+.Python
+
+# --- AI & Data (Hazel Specifics) ---
+# Ignore large model files or local datasets
+*.h5
+*.onnx
+*.pth
+*.weights
+*.pkl
+*.pb
+**/datasets/
+**/logs/
+**/output/
+
+# --- Node / Web (If applicable) ---
+**/node_modules/
+**/dist/
+.npm
+npm-debug.log*
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# --- Operating Systems ---
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+.directory
+
+# --- Git / Misc ---
+.git/
+*.log
+
+
+
+yolov8n.pt
+core

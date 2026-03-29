@@ -1,0 +1,14 @@
+[Unit]
+Description=Hazel Master Controller
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/Hazel/main_controller.py
+WorkingDirectory=/home/pi/Hazel
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
