@@ -211,14 +211,14 @@ class DBManager:
 
     # --- MUSIC DASHBOARD SYNC (Direct DB) ---
     def get_music_state(self):
-        """Fetches the current MusicState for this robot (commands and songs)."""
+        """Fetches the current MusicState for this robot (commands, songs, and queue)."""
         rid = self.get_robot_id()
         if not rid: return None
         
         try:
             if not self.conn or self.conn.closed: self._connect()
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute('SELECT command, song FROM "MusicState" WHERE robot_id = %s', (rid,))
+                cur.execute('SELECT command, song, queue FROM "MusicState" WHERE robot_id = %s', (rid,))
                 return cur.fetchone()
         except Exception as e:
             print(f"⚠️ get_music_state Error: {e}")

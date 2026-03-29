@@ -60,9 +60,17 @@ class SpotifyClone:
                             }
                             self.queue.append(yt_song)
                             if not self.is_playing: self.play_next()
-                            else: speak(f"Added {song.get('title')} to the queue")
+                            else: 
+                                speak(f"Added {song.get('title')} to the queue")
+                                self.sync_state() # Immediate sync to update web queue
 
-                    # 2. Clear command directly in DB
+                    # 2. Check for queue deletions/reorderings from the Web
+                    db_queue = state.get("queue")
+                    if isinstance(db_queue, list) and len(db_queue) < len(self.queue):
+                        print(f"🔄 Syncing Queue from Web (Removed {len(self.queue) - len(db_queue)} songs)")
+                        self.queue = db_queue # Source of truth is now the Web/DB
+                    
+                    # 3. Clear command directly in DB
                     self.db.clear_music_command()
 
                 # 3. Push current playback status directly to DB
@@ -79,8 +87,8 @@ class SpotifyClone:
                         "totalTime": total_t,
                         "isPlaying": self.is_playing,
                     }
-                    queue_simple = [{"title": s["title"]} for s in self.queue]
-                    self.db.update_music_state(nowPlaying, queue_simple)
+                    # Send FULL objects back so Title/Artist aren't lost
+                    self.db.update_music_state(nowPlaying, self.queue)
 
             except Exception as e:
                 print(f"📡 Sync Error: {e}")
@@ -190,8 +198,8 @@ class SpotifyClone:
                     "totalTime": total_t,
                     "isPlaying": self.is_playing,
                 }
-                queue_simple = [{"title": s["title"]} for s in self.queue]
-                self.db.update_music_state(nowPlaying, queue_simple)
+                # Send FULL objects back so Title/Artist aren't lost
+                self.db.update_music_state(nowPlaying, self.queue)
             except Exception: pass
 
     def _on_song_end(self, event):
