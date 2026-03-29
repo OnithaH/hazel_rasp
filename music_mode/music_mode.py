@@ -44,7 +44,8 @@ class SpotifyClone:
                 # 1. Fetch Master State from DB
                 state = self.db.get_music_state()
                 if not state:
-                    time.sleep(2)
+                    print("⚠️ Could not reach DB. Backing off for 5s...")
+                    time.sleep(5) # Give the DB some breathing room
                     continue
 
                 # 2. Check for queue updates/sync from Web (Source of Truth)

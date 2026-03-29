@@ -51,12 +51,20 @@ class DBManager:
             print("❌ DB ERROR: No DATABASE_URL found in .env or OS ENVIRONMENT.")
             return
 
+        # Close existing connection if any to prevent leaks
+        if self.conn:
+            try:
+                self.conn.close()
+            except: pass
+            self.conn = None
+
         try:
             self.conn = psycopg2.connect(self.db_url)
             self.conn.autocommit = True
             print("🔋 Direct DB Connection: SUCCESS")
         except Exception as e:
             print(f"❌ DB Connection Failed: {e}")
+            time.sleep(1) # Tiny back-off to prevent slamming the server
 
     def get_robot_id(self):
         """Lookup the UUID of this robot based on its secret key."""
@@ -75,7 +83,6 @@ class DBManager:
                     return self.robot_id
         except Exception as e:
             print(f"⚠️ get_robot_id Error: {e}")
-            self._connect() # Retry connection
         return None
 
     def log_environment(self, temp, humid):
