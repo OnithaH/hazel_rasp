@@ -2,22 +2,56 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
 import uuid
+import os
 
-# --- CONFIGURATION (Direct from Prisma .env) ---
-# For security/portability, the Pi should ideally load this from a .env file locally.
-DATABASE_URL = "postgres://avnadmin:AVNS_gpl60Nmxd.com:28516/hazeldb?sslmode=require"
-ROBOT_SECRET = "4aba04ec-2ff1-4ac9-a987-62bf6a25d905"
+# --- SECURE CONFIGURATION LOADING ---
+# We load these from a local .env file on the Pi that is NEVER pushed to GitHub.
+DATABASE_URL = None
+ROBOT_SECRET = None
+
+def load_local_env():
+    """Simple .env loader for the Raspberry Pi environment."""
+    global DATABASE_URL, ROBOT_SECRET
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    try:
+        if os.path.exists(env_path):
+            with open(env_path, 'r') as f:
+                for line in f:
+                    if '=' in line:
+                        key, value = line.strip().split('=', 1)
+                        # Remove quotes if present
+                        value = value.strip('"').strip("'")
+                        if key == 'DATABASE_URL': DATABASE_URL = value
+                        if key == 'ROBOT_SECRET': ROBOT_SECRET = value
+            print("🔐 Secrets loaded from local .env successfully.")
+    except Exception as e:
+        print(f"⚠️ Failed to load local .env: {e}")
+
+# Initial load
+load_local_env()
 
 class DBManager:
     def __init__(self):
         self.conn = None
         self.robot_id = None
+        if not DATABASE_URL:
+            # Final fallback to os.environ for cloud environments
+            self.db_url = os.getenv('DATABASE_URL')
+            self.secret = os.getenv('ROBOT_SECRET')
+        else:
+            self.db_url = DATABASE_URL
+            self.secret = ROBOT_SECRET
+            
         self._connect()
 
     def _connect(self):
         """Establishes connection to Aiven PostgreSQL."""
+        if not self.db_url:
+            print("❌ DB ERROR: No DATABASE_URL found in .env or OS ENVIRONMENT.")
+            return
+
         try:
-            self.conn = psycopg2.connect(DATABASE_URL)
+            self.conn = psycopg2.connect(self.db_url)
             self.conn.autocommit = True
             print("🔋 Direct DB Connection: SUCCESS")
         except Exception as e:
@@ -26,10 +60,14 @@ class DBManager:
     def get_robot_id(self):
         """Lookup the UUID of this robot based on its secret key."""
         if self.robot_id: return self.robot_id
+        if not self.secret: return None
         
         try:
+            if not self.conn or self.conn.closed:
+                self._connect()
+
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute('SELECT id FROM "Robot" WHERE secret_key = %s', (ROBOT_SECRET,))
+                cur.execute('SELECT id FROM "Robot" WHERE secret_key = %s', (self.secret,))
                 res = cur.fetchone()
                 if res:
                     self.robot_id = res['id']
@@ -55,7 +93,7 @@ class DBManager:
                 print(f"⚠️ log_environment Error: {e}")
 
     def start_study_session(self, duration_min=60, focus_goal=None):
-        """Creates a new instance of a study session (The 'Instance' you asked about)."""
+        """Creates a new instance of a study session."""
         rid = self.get_robot_id()
         if not rid: return None
         
