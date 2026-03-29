@@ -146,19 +146,19 @@ try:
         if ser and ser.in_waiting > 0:
             raw = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
             
-            if "MODE_GENERAL" in raw: 
+            if "MODE_GENERAL" in raw and current_active_mode != "General": 
                 run_program("general_mode/general_mode.py", ENV_GENERAL, True, False, "General")
                 current_active_mode = "General"
             
-            elif "MODE_STUDY" in raw: 
+            elif "MODE_STUDY" in raw and current_active_mode != "Study": 
                 run_program("study_mode/Hazel_Integrated.py", ENV_STUDY, True, False, "Study")
                 current_active_mode = "Study"
             
-            elif "MODE_GAME" in raw:  
+            elif "MODE_GAME" in raw and current_active_mode != "Game":  
                 run_program("game_mode/Games_combined.py", ENV_GAME, False, False, "Game")
                 current_active_mode = "Game"
             
-            elif "MODE_MUSIC" in raw: 
+            elif "MODE_MUSIC" in raw and current_active_mode != "Music": 
                 run_program("music_mode/music_mode.py", ENV_MUSIC, True, False, "Music")
                 current_active_mode = "Music"
             

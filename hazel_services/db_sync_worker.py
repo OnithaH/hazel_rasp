@@ -10,8 +10,10 @@ STATUS_FILE = "/tmp/hazel_sensor_data.json"  # Mailbox for Robot -> Web
 
 # Initialize the Direct Database Manager
 db = DBManager()
+last_session_check = 0 # Module-level persistent variable
 
 def sync():
+    global last_session_check
     try:
         # 1. SEND TELEMETRY (Robot -> DB)
         if os.path.exists(STATUS_FILE):
