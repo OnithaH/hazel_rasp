@@ -1,101 +1,117 @@
-import cv2, pygame, serial, time, os, sys, signal
+import cv2, pygame, serial, time, os, sys, signal, json
 from picamera2 import Picamera2
-import Focus_Tracking, Active_user_tracking, Phone_Detection
+import Focus_Tracking, Phone_Detection
 
-# Get the directory where THIS script (Hazel_Integrated.py) is actually stored
+# Add parent directory to path so we can import from hazel_services
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'hazel_services'))
+from db_manager import DBManager
+
+# --- CONFIGURATION ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+STUDY_CONFIG = "/tmp/hazel_study_config.json"
+BREAK_TRIGGER = "/tmp/hazel_break_trigger.json"
+
+# Initialize Database Manager
+db = DBManager()
+current_session_id = None
 
 # --- SIGNAL HANDLER FOR CLEAN EXIT ---
 def signal_handler(sig, frame):
-    """Triggers the 'finally' block when the Master Controller sends SIGINT."""
+    global current_session_id
     print("\n[INFO] Study Mode stop signal received. Cleaning up...")
+    if current_session_id:
+        db.end_study_session(current_session_id)
     sys.exit(0)
 
-signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 
 def main():
+    global current_session_id
+    
     # --- INITIALIZE SERIAL FOR ESP1 (BASE STATION) ---
     try:
-        # Use a short timeout so the AI loop doesn't hang
         esp1 = serial.Serial('/dev/ttyAMA0', 115200, timeout=0.01)
         print("✅ Connected to ESP1 Base Station")
     except Exception as e:
-        print(f"❌ Serial Error: {e}. Check wiring or permissions.")
+        print(f"❌ Serial Error: {e}")
         esp1 = None
 
     # --- CAMERA SETUP ---
     picam2 = Picamera2()
+    # Main stream for detection, main stream also needs to be compatible with Picamera2 capture_array 
     config = picam2.create_preview_configuration(main={'size': (640, 480)})
     picam2.configure(config)
     picam2.start()
     
-    # --- AUDIO SETUP (Fixed Paths) ---
+    # --- AUDIO SETUP ---
     pygame.mixer.init()
-    
-    # Construct absolute paths to the MP3 files
     ft_alarm_path = os.path.join(SCRIPT_DIR, "Alarm_Sound_FT.mp3")
-    pd_alarm_path = os.path.join(SCRIPT_DIR, "Alarm_Sound_PD.mp3")
+    pygame.mixer.music.load(ft_alarm_path)
 
-    try:
-        pygame.mixer.music.load(ft_alarm_path)
-        music_loaded = True
-        print(f"✅ Loaded: {ft_alarm_path}")
-    except Exception as e:
-        print(f"⚠️ Warning: {ft_alarm_path} not found. Error: {e}")
-        music_loaded = False 
-        
-    try:
-        pd_sound = pygame.mixer.Sound(pd_alarm_path)
-        print(f"✅ Loaded: {pd_alarm_path}")
-    except Exception as e:
-        print(f"⚠️ Warning: {pd_alarm_path} not found. Error: {e}")
-        pd_sound = None 
+    # --- START SESSION INSTANCE ---
+    print("🚦 Initializing Study Instance in Database...")
+    current_session_id = db.start_study_session(duration_min=60, focus_goal="Direct DB Focus")
 
-    print("🚀 Hazel Integrated Sentinel is running (HEADLESS MODE)...")
+    if not current_session_id:
+        print("⚠️ Warning: Failed to create session in DB. Sentinel will continue locally.")
+
+    print(f"🚀 Hazel Sentinel ACTIVE. (Session UUID: {current_session_id})")
+
+    # Tracking
+    last_ui_update = 0
+    distraction_cooldown = 0 
 
     try:
         while True:
-            # Check for quit signal from ESP32 via Serial
-            if esp1 and esp1.in_waiting > 0:
-                data = esp1.read(esp1.in_waiting).decode('utf-8', errors='ignore')
-                if 'q' in data:
-                    break
-
+            # 1. READ CLOUD CONFIG (Mailbox - potentially still updated by DB sync worker)
+            # The UI logic (T:XX) remains in the main_controller or sync worker
+            
+            # 2. COMPUTER VISION DETECTION (YOLO & MediaPipe)
             frame_raw = picam2.capture_array()
             if frame_raw is None: continue
-            
-            # Convert XBGR to BGR
             frame = cv2.cvtColor(frame_raw, cv2.COLOR_BGRA2BGR)
             
-            # 1. Focus Tracking (Eyes/Head Pose)
-            frame = Focus_Tracking.process_frame(frame, music_loaded)
+            # 4a. Focus/Drowsiness Tracking
+            drowsy = Focus_Tracking.is_drowsy(frame)
             
-            # 2. Active User Tracking (Movement via ESP1)
-            # Re-enabled: Removing imshow reduces lag for smoother motor control
-            #frame = Active_user_tracking.process_frame(frame, esp1)
-            
-            # 3. Phone Detection (YOLO)
-            frame = Phone_Detection.process_frame(frame, pd_sound)
-            
-            # --- DISPLAY DISABLED FOR SPEED ---
-            # cv2.imshow("Hazel Integrated Sentinel", frame)
-            
-            # Keep the 1ms overhead for internal OpenCV maintenance
+            # 4b. Phone Detection
+            phone = Phone_Detection.detect_phone(frame)
+
+            # 3. DISTRACTION ALERT & DB LOGGING
+            if (drowsy or phone) and time.time() > distraction_cooldown:
+                print(f"⚠️ Distraction Trace: Drowsy={drowsy}, Phone={phone}")
+                if esp1: esp1.write(b"A:1\n") # Red LEDs + Peppermint
+                # play alarm
+                if not pygame.mixer.music.get_busy():
+                    pygame.mixer.music.play()
+                
+                # DIRECT DB INSERT (No API headache)
+                if current_session_id:
+                    d_type = "PHONE" if phone else "DROWSINESS"
+                    db.log_distraction(current_session_id, d_type)
+                
+                distraction_cooldown = time.time() + 30
+            elif not (drowsy or phone) and time.time() < (distraction_cooldown - 28):
+                # Reset alarm after at least 2 seconds of good behavior
+                if esp1: esp1.write(b"A:0\n")
+                pygame.mixer.music.stop()
+
+            # OpenCV waitKey is needed for internal processing
             cv2.waitKey(1)
             
-    except KeyboardInterrupt:
-        print("\nShutting down...")
+    except Exception as e:
+        print(f"\n❌ Sentinel Error: {e}")
     finally:
-        # Crucial for releasing hardware
         print("Releasing Study Mode hardware...")
+        if current_session_id:
+            db.end_study_session(current_session_id)
         if esp1: 
             try:
-                esp1.write(b'S') # Stop motor before closing
+                esp1.write(b"A:0\n")
+                esp1.write(b"T:0\n")
                 esp1.close()
             except: pass
         picam2.stop()
-        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
