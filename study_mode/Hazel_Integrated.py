@@ -1,4 +1,4 @@
-import cv2, pygame, serial, time, os, sys, signal, json
+import cv2, pygame, serial, time, os, sys, signal, json, shlex, subprocess
 from picamera2 import Picamera2
 import Focus_Tracking, Phone_Detection
 
@@ -14,6 +14,9 @@ BREAK_TRIGGER = "/tmp/hazel_break_trigger.json"
 # Initialize Database Manager
 db = DBManager()
 current_session_id = None
+
+# Optimization for RPi Audio in background
+os.environ["SDL_AUDIODRIVER"] = "alsa"
 
 # --- SIGNAL HANDLER FOR CLEAN EXIT ---
 def signal_handler(sig, frame):
@@ -50,9 +53,16 @@ def run_interactive_revision(material_id):
 def main():
     global current_session_id
     
+    # Give a small 1s buffer for DB/Sync consistency
+    time.sleep(1)
+
     # 1. IDENTIFY SESSION & CONFIG
     print("🚦 Fetching Session Details from Database...")
-    session = db.get_active_session()
+    session = None
+    for _ in range(3): # Retry 3 times
+        session = db.get_active_session()
+        if session: break
+        time.sleep(1)
     
     if not session:
         print("❌ No active Web Session found. The robot will not start a session.")
@@ -62,12 +72,11 @@ def main():
         current_session_id = session['id']
         print(f"✅ Synced with Web Session: {current_session_id}")
 
-    # 2. DECIDE MODE: REVISE vs STANDARD
     is_revise = False
     material_id = None
     if session.get('focus_goal') and session['focus_goal'].startswith("REVISE:"):
         is_revise = True
-        material_id = session['focus_goal'].replace("REVISE:", "")
+        material_id = session['focus_goal'].replace("REVISE:", "").strip()
 
     # --- INITIALIZE SERIAL FOR ESP1 (BASE STATION) ---
     try:
@@ -84,10 +93,22 @@ def main():
     else:
         # PATH B: STANDARD STUDY (Focus Tracking)
         # --- CAMERA SETUP ---
-        picam2 = Picamera2()
-        config = picam2.create_preview_configuration(main={'size': (640, 480)})
-        picam2.configure(config)
-        picam2.start()
+        picam2 = None
+        for _ in range(5): # Camera hardware can be slow to release
+            try:
+                picam2 = Picamera2()
+                config = picam2.create_preview_configuration(main={'size': (640, 480)})
+                picam2.configure(config)
+                picam2.start()
+                break
+            except Exception as e:
+                print(f"📷 Camera Init Retry... {e}")
+                time.sleep(1.5)
+        
+        if not picam2:
+            print("❌ TOTAL CAMERA FAILURE")
+            speak("Hardware error. I cannot access the camera.")
+            return
         
         # --- AUDIO SETUP ---
         pygame.mixer.init()

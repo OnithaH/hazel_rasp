@@ -83,6 +83,7 @@ class DBManager:
         if not rid: return
         
         try:
+            if not self.conn or self.conn.closed: self._connect()
             with self.conn.cursor() as cur:
                 cur.execute(
                     'INSERT INTO "EnvironmentLog" (id, robot_id, temperature, humidity, recorded_at) '
@@ -99,6 +100,7 @@ class DBManager:
         
         session_id = str(uuid.uuid4())
         try:
+            if not self.conn or self.conn.closed: self._connect()
             with self.conn.cursor() as cur:
                 cur.execute(
                     'INSERT INTO "StudySession" (id, robot_id, start_time, scheduled_duration, focus_goal) '
@@ -114,6 +116,7 @@ class DBManager:
     def end_study_session(self, session_id):
         """Closes the session by setting the end_time."""
         try:
+            if not self.conn or self.conn.closed: self._connect()
             with self.conn.cursor() as cur:
                 cur.execute(
                     'UPDATE "StudySession" SET end_time = NOW() WHERE id = %s',
@@ -126,6 +129,7 @@ class DBManager:
     def log_distraction(self, session_id, d_type):
         """Logs phone or drowsiness events during a session."""
         try:
+            if not self.conn or self.conn.closed: self._connect()
             with self.conn.cursor() as cur:
                 cur.execute(
                     'INSERT INTO "DistractionLog" (id, session_id, type, timestamp) '

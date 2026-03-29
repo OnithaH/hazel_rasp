@@ -68,7 +68,7 @@ def run_program(script_path, venv_path, needs_face=True, needs_convo=False, mode
         except subprocess.TimeoutExpired:
             active_process.kill() # Force kill if it hangs
         active_process = None
-        time.sleep(0.5) # Critical delay to allow GPU/Camera reset
+        time.sleep(2.0) # Critical delay to allow GPU/Camera reset
 
     # C. Face Persistence
     if needs_face:
