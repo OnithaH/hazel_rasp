@@ -105,8 +105,8 @@ try:
 except Exception as e:
     print(f"❌ Serial Error: {e}")
 
-# Initial Mode Start
-run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs_convo=False, mode_name="General")
+# Initial Mode Start (Enabling voice conversation by default)
+run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs_convo=True, mode_name="General")
 
 # --- 5. MAIN LOOP ---
 current_active_mode = "General"
@@ -144,7 +144,7 @@ try:
                     current_active_mode = "Study"
                     last_mode_change_time = now
                 elif cmd == "MODE_GENERAL" and current_active_mode != "General":
-                    run_program("general_mode/general_mode.py", ENV_GENERAL, True, False, "General")
+                    run_program("general_mode/general_mode.py", ENV_GENERAL, True, True, "General")
                     current_active_mode = "General"
                     last_mode_change_time = now
                 elif cmd == "MODE_GAME" and current_active_mode != "Game":
