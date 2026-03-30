@@ -8,9 +8,6 @@ from db_manager import DBManager
 
 # --- CONFIGURATION ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-STUDY_CONFIG = "/tmp/hazel_study_config.json"
-BREAK_TRIGGER = "/tmp/hazel_break_trigger.json"
-
 # Initialize Database Manager
 db = DBManager()
 current_session_id = None
@@ -56,17 +53,20 @@ def main():
     time.sleep(1)
 
     # 1. IDENTIFY SESSION & CONFIG
-    print("🚦 Fetching Session Details from Database...")
+    print("🚦 Syncing with Web Dashboard (Waiting for Session)...")
     session = None
-    for _ in range(3): # Retry 3 times
+    for i in range(30): # Wait up to 60 seconds
         session = db.get_active_session()
         if session: break
-        time.sleep(1)
+        
+        if (i + 1) % 5 == 0:
+            print(f"   ... still waiting for active session (Attempt {i+1}/30)")
+        time.sleep(2)
     
     if not session:
-        print("❌ No active Web Session found. The robot will not start a session.")
-        speak("I don't see an active session on the website yet. Please start one from your dashboard.")
-        return # Exit without creating any session records
+        print("❌ TIMEOUT: No active Web Session found.")
+        speak("I couldn't find an active session. Please start one on your dashboard.")
+        return # Exit
     else:
         current_session_id = session['id']
         print(f"✅ Synced with Web Session: {current_session_id}")

@@ -1,8 +1,10 @@
 import pygame
 import sys  # <--- Needed for clean exit codes
 
-# Initialize Pygame
-pygame.init()
+# Initialize Pygame Display (ONLY)
+# We avoid full pygame.init() to keep audio drivers free for other modes
+pygame.display.init()
+pygame.font.init()
 
 # New requested resolution
 WIDTH, HEIGHT = 640, 480 
