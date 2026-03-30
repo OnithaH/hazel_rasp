@@ -121,11 +121,14 @@ def main():
         ft_sound = pygame.mixer.Sound(ft_alarm_path)
         pd_sound = pygame.mixer.Sound(pd_alarm_path)
 
-        print(f"🚀 Hazel Sentinel ACTIVE (Phone Detection: {session['phone_detection_enabled']})")
+        # --- ALERT STATE ---
+        frame_count = 0
+        last_db_log_time = 0        # Fixes 'UnboundLocalError' crash
+        current_alert_type = None   # None, "FT", "PD"
         
+        # Volume throttle to prevent AI lag
         last_vol_change_time = 0
-        VOL_CHANGE_COOLDOWN = 0.5   # Prevention against spam
-        current_alert_type = None # None, "FT", "PD"
+        VOL_CHANGE_COOLDOWN = 0.5   
         try:
             while True:
                 frame_raw = picam2.capture_array()
