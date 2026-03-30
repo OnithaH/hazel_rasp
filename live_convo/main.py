@@ -10,8 +10,10 @@ from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 
 # --- ABSOLUTE PATH CONFIG ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-env_path = os.path.join(SCRIPT_DIR, ".env")
-load_dotenv(env_path)
+SPEECH_FILE = os.path.join(SCRIPT_DIR, "speech.mp3")
+ENV_PATH = os.path.join(SCRIPT_DIR, ".env")
+
+load_dotenv(ENV_PATH)
 
 # 1. CLIENTS & SYSTEM SETUP
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -51,8 +53,9 @@ async def get_groq_response(text):
         response = completion.choices[0].message.content
         messages.append({"role": "assistant", "content": response})
         return response
-    except Exception:
-        return "Brain glitch. Try again."
+    except Exception as e:
+        print(f"⚠️ Groq Brain Error: {e}")
+        return "I'm having a bit of a brain glitch. Could you repeat that?"
 
 async def speak(text, dg_connection):
     """High-quality Female Neural TTS"""
@@ -68,10 +71,10 @@ async def speak(text, dg_connection):
 
     # 2. GENERATE NEURAL AUDIO
     communicate = edge_tts.Communicate(text, VOICE)
-    await communicate.save("speech.mp3")
+    await communicate.save(SPEECH_FILE)
 
     # 3. PLAY AUDIO (Non-blocking so we can send silence)
-    p = subprocess.Popen(["mpv", "--no-video", "speech.mp3"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    p = subprocess.Popen(["mpv", "--no-video", SPEECH_FILE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
     # 4. KEEP-ALIVE: Send silence to Deepgram
     while p.poll() is None:
@@ -122,10 +125,12 @@ async def main():
     )
 
     print(f"\n🚀 HAZEL CORE 2026: ONLINE (Neural Voice: {VOICE})")
-    if not dg_connection.start(options): return
+    if not dg_connection.start(options): 
+        print("❌ CRITICAL: Failed to connect to Deepgram. Check your DEEPGRAM_API_KEY.")
+        return
 
     start_mic()
-    print("🎤 Hazel is listening. She sounds much better now!\n")
+    print("🎤 Hazel is listening. (Using Groq llama-3.3-70b-versatile)\n")
 
     try:
         while True:
