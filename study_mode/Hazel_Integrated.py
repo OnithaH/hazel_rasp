@@ -77,21 +77,13 @@ def main():
         is_revise = True
         material_id = session['focus_goal'].replace("REVISE:", "").strip()
 
-    # --- INITIALIZE SERIAL FOR ESP1 & ESP2 ---
+    # --- INITIALIZE SERIAL FOR ESP1 (BASE STATION) ---
     try:
         esp1 = serial.Serial('/dev/ttyAMA0', 115200, timeout=0.01)
         print("✅ Connected to ESP1 Base Station")
     except Exception as e:
-        print(f"❌ Serial Error (ESP1): {e}")
+        print(f"❌ Serial Error: {e}")
         esp1 = None
-        
-    try:
-        esp2 = serial.Serial('/dev/ttyAMA3', 115200, timeout=0.01)
-        esp2.write(b's') # Set Initial Study Light (Green)
-        print("✅ Connected to ESP2 Light Controller")
-    except Exception as e:
-        print(f"❌ Serial Error (ESP2): {e}")
-        esp2 = None
 
     # --- BRANCH LOGIC ---
     if is_revise:
@@ -162,7 +154,6 @@ def main():
                         pd_sound.play(-1)
                         current_alert_type = "PD"
                         if esp1: esp1.write(b"A:1\n")
-                        if esp2: esp2.write(b"d") # DISTRACTION (Red Blink)
                         
                     # Log to DB (Throttle to once every 30s)
                     if now - last_db_log_time > 30:
@@ -176,7 +167,6 @@ def main():
                         ft_sound.play(-1)
                         current_alert_type = "FT"
                         if esp1: esp1.write(b"A:1\n")
-                        if esp2: esp2.write(b"d") # DISTRACTION (Red Blink)
                         
                     if now - last_db_log_time > 30:
                         db.log_distraction(current_session_id, "DROWSINESS")
@@ -188,7 +178,6 @@ def main():
                         pygame.mixer.stop()
                         current_alert_type = None
                         if esp1: esp1.write(b"A:0\n")
-                        if esp2: esp2.write(b's') # BACK TO STUDY (Green)
 
                 cv2.waitKey(1)
         except Exception as e:
@@ -205,12 +194,6 @@ def main():
             esp1.write(b"A:0\n")
             esp1.write(b"T:0\n")
             esp1.close()
-        except: pass
-
-    if esp2:
-        try:
-            esp2.write(b'g') # Revert to General on exit
-            esp2.close()
         except: pass
 
 if __name__ == "__main__":

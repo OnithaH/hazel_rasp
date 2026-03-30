@@ -11,6 +11,7 @@ import shlex  # Safely handles strings for system commands
 try:
     import smbus2
 except ImportError:
+    
     print("⚠️ smbus2 not found. Run: pip install smbus2")
 
 # --- 1. CONFIGURATION & PATHS ---
@@ -28,7 +29,6 @@ CONVO_NAME  = "hazel-live-convo"
 UPS_ADDR = 0x42 
 bus = None
 ser = None
-ser2 = None  # ESP2 Light Controller (/dev/ttyAMA3)
 active_process = None
 face_process   = None 
 
@@ -50,37 +50,40 @@ def get_voltage():
 def speak(text):
     """Uses espeak to announce mode changes in the background."""
     print(f"🔊 HAZEL: {text}")
+    # The '&' at the end ensures the Pi doesn't wait for the voice to finish before switching modes
     os.system(f"espeak -ven+f3 -s120 -p50 {shlex.quote(text)} 2>/dev/null &")
 
 # --- 3. PROCESS MANAGEMENT ---
 def run_program(script_path, venv_path, needs_face=True, needs_convo=False, mode_name="General"):
-    global active_process, face_process, ser, ser2
+    global active_process, face_process, ser
     
     # A. Voice Announcement
     speak(f"Now you are in {mode_name} mode")
     
-    # Update current mode state
+    # Update current mode state for background services
     try:
         with open("/tmp/hazel_current_mode.txt", "w") as f:
             f.write(mode_name)
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Failed to write mode state: {e}")
 
-    # B. Stop existing mode
+    # B. Stop existing mode cleanly to release Camera hardware
     if active_process:
         print(f"🛑 Stopping current process: {active_process.pid}")
-        active_process.send_signal(signal.SIGINT)
+        active_process.send_signal(signal.SIGINT) # Triggers 'finally' cleanup in scripts
         try:
-            active_process.wait(timeout=2.0)
+            active_process.wait(timeout=2.0) # Give it time to run cleanup
         except subprocess.TimeoutExpired:
-            active_process.kill()
+            active_process.kill() # Force kill if it hangs
         active_process = None
-        time.sleep(2.0)
+        time.sleep(2.0) # Critical delay to allow GPU/Camera reset
 
     # C. Face Persistence
     if needs_face:
         if not face_process:
             print("😊 Opening Hazel Face...")
             face_script = f"{BASE_PATH}/hazel_face/face.py"
+            # Ensure logs are unbuffered and audio environment is passed
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
             face_process = subprocess.Popen([ENV_FACE, face_script], env=env, stdout=sys.stdout, stderr=sys.stderr)
@@ -90,7 +93,7 @@ def run_program(script_path, venv_path, needs_face=True, needs_convo=False, mode
             face_process.send_signal(signal.SIGINT)
             face_process = None
 
-    # D. Handle Live Conversation
+    # D. Handle Live Conversation (Managed via PM2)
     if needs_convo:
         os.system(f"pm2 start {CONVO_NAME}")
     else:
@@ -98,55 +101,25 @@ def run_program(script_path, venv_path, needs_face=True, needs_convo=False, mode
 
     if ser: ser.reset_input_buffer()
     
-    # E. ESP2 Light Hand-off
-    if mode_name == "Study" and ser2:
-        print("💡 Releasing Light Controller to Study Mode...")
-        try:
-            ser2.close()
-            ser2 = None
-        except: pass
-    elif mode_name != "Study" and not ser2:
-        try:
-            ser2 = serial.Serial('/dev/ttyAMA3', 115200, timeout=1)
-            print("💡 Light Controller Reclaimed")
-        except: pass
-
-    # F. Send Mode Light Command
-    if ser2:
-        mode_map = {"General": b'g', "Game": b'x', "Music": b'm', "Study": b's'}
-        cmd = mode_map.get(mode_name, b'g')
-        try:
-            ser2.write(cmd)
-        except: pass
-
-    # G. Launch Mode
+    # E. Launch Mode
     full_path = f"{BASE_PATH}/{script_path}"
     print(f"🚀 Launching {mode_name} Mode...")
+    # Support for real-time logs in PM2
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     active_process = subprocess.Popen([venv_path, full_path], env=env, stdout=sys.stdout, stderr=sys.stderr)
 
+
 # --- 4. INITIALIZATION ---
 try:
-    # 1. ESP1 (Base Station)
     ser = serial.Serial('/dev/ttyAMA0', 115200, timeout=1)
     time.sleep(2) 
     ser.write(b'1') # Trigger JBL Power ON
-    print("✅ ESP1 Base Station Connected")
-
-    # 2. ESP2 (Light Controller)
-    try:
-        ser2 = serial.Serial('/dev/ttyAMA3', 115200, timeout=1)
-        ser2.write(b'g') # Default to General (White)
-        print("✅ ESP2 Light Controller Connected")
-    except Exception as e2:
-        print(f"⚠️ Light Controller (ESP2) skipped: {e2}")
-
     print("✅ Hardware Ready")
 except Exception as e:
-    print(f"❌ Hardware Initialization Error: {e}")
+    print(f"❌ Serial Error: {e}")
 
-# Initial Start
+# Initial Mode Start (Enabling voice conversation by default)
 with open("/tmp/hazel_current_mode.txt", "w") as f:
     f.write("General")
 run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs_convo=True, mode_name="General")
@@ -155,26 +128,27 @@ run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs
 current_active_mode = "General"
 last_mode_change_time = 0
 last_vol_change_time = 0
-MODE_SWITCH_COOLDOWN = 3.0
-VOL_CHANGE_COOLDOWN = 0.3
+MODE_SWITCH_COOLDOWN = 3.0 # Guard timer
+VOL_CHANGE_COOLDOWN = 0.3 # Prevention against spam
 
 try:
     last_sync = 0
     last_dht_request = 0
     while True:
         now = time.time()
+        # A. Telemetry & Battery Safety (Every 10s)
         current_v = get_voltage()
         
         # Poll DHT every 30s
-        if now - last_dht_request > 30:
+        if time.time() - last_dht_request > 30:
             if ser: ser.write(b'd') 
-            last_dht_request = now
+            last_dht_request = time.time()
 
-        if 0.1 < current_v < 6.4:
-            if ser: ser.write(b'0')
+        if 0.1 < current_v < 6.4: # Shutdown for 2S Li-ion
+            if ser: ser.write(b'0') # JBL OFF
             os.system("sudo shutdown now")
 
-        # Remote Web Commands
+        # B. Check Remote Web Commands (From db_sync_worker)
         if os.path.exists("/tmp/hazel_mode_cmd") and (now - last_mode_change_time > MODE_SWITCH_COOLDOWN):
             try:
                 with open("/tmp/hazel_mode_cmd", "r") as f:
@@ -200,24 +174,34 @@ try:
             except Exception as e:
                 print(f"⚠️ Remote Cmd Error: {e}")
 
-        # Physical Inputs
+        # C. Check Physical Inputs (ESP32 UART)
         if ser and ser.in_waiting > 0:
             raw = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
+            
+            # --- MODE BUTTONS DISABLED PER USER REQUEST ---
+            # (Stops ghost-switch interference/yapping loops)
             if "Vol up" in raw and (now - last_vol_change_time > VOL_CHANGE_COOLDOWN):     
                 os.system("amixer set Master 5%+")
                 last_vol_change_time = now
+            
             elif "Vol down" in raw and (now - last_vol_change_time > VOL_CHANGE_COOLDOWN):
                 os.system("amixer set Master 5%-")
                 last_vol_change_time = now
+            
+            # C. Parse DHT Telemetry (Keep active for health monitoring)
             elif "T:" in raw:
                 try:
+                    # Example: T:24.5 H:60.2
                     parts = raw.split()
                     temp = float(parts[0].replace("T:", ""))
                     humid = float(parts[1].replace("H:", ""))
+                    
+                    # Store in Mailbox for DB Sync Worker
                     data = {"temperature": temp, "humidity": humid}
                     with open("/tmp/hazel_sensor_data.json", "w") as f:
                         json.dump(data, f)
-                except: pass
+                except Exception as e:
+                    print(f"⚠️ Telemetry Parse Error: {e}")
 
         time.sleep(0.01)
 
