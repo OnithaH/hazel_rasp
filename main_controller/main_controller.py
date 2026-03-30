@@ -4,6 +4,7 @@ import time
 import os
 import json
 import signal
+import sys
 import shlex  # Safely handles strings for system commands
 
 # Try to import smbus2 for UPS HAT B
@@ -75,7 +76,10 @@ def run_program(script_path, venv_path, needs_face=True, needs_convo=False, mode
         if not face_process:
             print("😊 Opening Hazel Face...")
             face_script = f"{BASE_PATH}/hazel_face/face.py"
-            face_process = subprocess.Popen([ENV_FACE, face_script])
+            # Ensure logs are unbuffered and audio environment is passed
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            face_process = subprocess.Popen([ENV_FACE, face_script], env=env, stdout=sys.stdout, stderr=sys.stderr)
     else:
         if face_process:
             print("😴 Closing Hazel Face...")
@@ -93,7 +97,10 @@ def run_program(script_path, venv_path, needs_face=True, needs_convo=False, mode
     # E. Launch Mode
     full_path = f"{BASE_PATH}/{script_path}"
     print(f"🚀 Launching {mode_name} Mode...")
-    active_process = subprocess.Popen([venv_path, full_path])
+    # Support for real-time logs in PM2
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    active_process = subprocess.Popen([venv_path, full_path], env=env, stdout=sys.stdout, stderr=sys.stderr)
 
 
 # --- 4. INITIALIZATION ---
