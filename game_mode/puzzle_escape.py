@@ -847,6 +847,10 @@ class Game:
                     else:
                         self.handle_input(event.key)
             
+            self.handle_gestures()
+            self.update()
+            self.draw()
+            
             if self.state == WON:
                 final_result = "Win"
             elif self.state == LOST:
