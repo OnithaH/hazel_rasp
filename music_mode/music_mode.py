@@ -103,28 +103,6 @@ class SpotifyClone:
             except Exception: pass
             time.sleep(1)
 
-    def search_and_stage(self, query):
-        """Search and add song to staging queue"""
-        print(f"   Searching for: {query}")
-        res = self.yt.search(query, filter="songs")
-        if res:
-            song = res[0]
-            self.staging_queue.append(song)
-            print(f"   Added: {song['title']} to staging queue")
-            speak(f"Added {song['title']} to queue")
-            return True
-        else:
-            print("   Song not found")
-            speak("Song not found")
-            return False
-
-    def play_staging_queue(self):
-        if not self.staging_queue: return
-        self.queue.extend(self.staging_queue)
-        self.staging_queue = []
-        speak("Playing your queue now")
-        if not self.is_playing: self.play_next()
-
     def search_and_play_now(self, query):
         """Search and play song immediately"""
         print(f"   Searching for: {query}")
@@ -213,8 +191,6 @@ class VoiceController:
                     audio = self.recognizer.listen(source, timeout=None, phrase_time_limit=4)
                     cmd = self.recognizer.recognize_google(audio).lower()
                     if "exit" in cmd: break
-                    elif "run queue" in cmd: self.app.play_staging_queue()
-                    elif "add to queue" in cmd: self.app.search_and_stage(cmd.replace("add to queue", "").strip())
                     elif "next" in cmd: self.app.play_next()
                     elif "previous" in cmd: self.app.play_previous()
                     elif "pause" in cmd or "stop" in cmd: self.app.toggle_pause()

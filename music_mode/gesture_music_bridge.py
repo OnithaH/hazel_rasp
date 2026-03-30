@@ -32,7 +32,6 @@ class GestureMusicBridge:
             'fist': 0,
             'swipe_left': 0,
             'swipe_right': 0,
-            'peace': 0,
             'pointing': 0,
             'open_palm': 0
         }
@@ -43,7 +42,6 @@ class GestureMusicBridge:
         
         # Voice recognition flag to prevent multiple simultaneous voice sessions
         self.voice_active = False
-        
     def start(self):
         """Initialize and start all components"""
         print("\n" + "="*60)
@@ -55,9 +53,9 @@ class GestureMusicBridge:
         self.music_player = SpotifyClone()
         speak("Music mode initialized")
         
-        # Initialize gesture controller
+        # Initialize gesture controller (Hidden GUI)
         print("\n[2/3] Initializing Gesture Controller...")
-        self.gesture_controller = GestureController(show_feedback=True, camera_size=(640, 480))
+        self.gesture_controller = GestureController(show_feedback=False, camera_size=(640, 480))
         
         if not self.gesture_controller.start_camera():
             print("Error: Could not start camera")
@@ -69,15 +67,14 @@ class GestureMusicBridge:
         self.gesture_thread.start()
         
         print("\n" + "="*60)
-        print("SYSTEM READY! Gesture controls active:")
+        print("SYSTEM READY! Website Queue Active.")
+        print("Gesture controls active (Hidden):")
         print("  👍  THUMBS UP  →  Play music")
         print("  ✊  FIST       →  Pause music")
         print("  ➡️  SWIPE RIGHT →  Next track")
         print("  ⬅️  SWIPE LEFT  →  Previous track")
-        print("  ✌️  PEACE      →  Add to queue (voice command)")
-        print("  👆  POINTING   →  Play now (voice command)")
+        print("  👆  POINTING   →  Voice Search (Play Now)")
         print("  🖐️  OPEN PALM   →  Neutral (no action)")
-        print("\nPress 'q' in camera window to quit")
         print("="*60 + "\n")
         
         return True
@@ -136,10 +133,6 @@ class GestureMusicBridge:
         elif gesture == "swipe_left":
             self._handle_previous()
             self.last_gesture_time['swipe_left'] = current_time
-            
-        elif gesture == "peace":
-            self._handle_peace()
-            self.last_gesture_time['peace'] = current_time
             
         elif gesture == "pointing":
             self._handle_pointing()
@@ -215,20 +208,7 @@ class GestureMusicBridge:
         else:
             print("   No previous track")
             speak("No previous track available")
-    
-    def _handle_peace(self):
-        """Handle peace sign - activates voice command for adding to queue"""
-        if self.voice_active:
-            print("   Voice recognition already active")
-            return
-            
-        print(f"\n🎵 Gesture: PEACE → VOICE COMMAND (Add to queue)")
-        speak("What song would you like to add to the queue?")
-        
-        # Start voice recognition in separate thread
-        voice_thread = threading.Thread(target=self._voice_add_to_queue, daemon=True)
-        voice_thread.start()
-    
+
     def _handle_pointing(self):
         """Handle pointing gesture - activates voice command for playing now"""
         if self.voice_active:
@@ -241,57 +221,6 @@ class GestureMusicBridge:
         # Start voice recognition in separate thread
         voice_thread = threading.Thread(target=self._voice_play_now, daemon=True)
         voice_thread.start()
-    
-    def _voice_add_to_queue(self):
-        """Voice recognition for adding song to queue"""
-        self.voice_active = True
-        
-        try:
-            import speech_recognition as sr
-            recognizer = sr.Recognizer()
-            
-            # Use default microphone
-            with sr.Microphone() as source:
-                print("   🎤 Listening for song name...")
-                
-                # Adjust for ambient noise
-                recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                
-                try:
-                    # Listen with timeout
-                    audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
-                    print("   Processing speech...")
-                    
-                    # Recognize speech
-                    query = recognizer.recognize_google(audio).lower()
-                    print(f"   ✅ Recognized: '{query}'")
-                    
-                    if query and len(query) > 0:
-                        # Search and add to queue
-                        result = self.music_player.search_and_stage(query)
-                        if not result:
-                            speak("Sorry, I couldn't find that song")
-                    else:
-                        speak("I didn't catch that")
-                        
-                except sr.WaitTimeoutError:
-                    print("   ⏰ No voice detected")
-                    speak("I didn't hear anything")
-                except sr.UnknownValueError:
-                    print("   🤔 Could not understand audio")
-                    speak("Sorry, I didn't understand that")
-                except sr.RequestError as e:
-                    print(f"   🌐 Speech recognition service error: {e}")
-                    speak("Speech recognition service error")
-                except Exception as e:
-                    print(f"   ❌ Voice recognition error: {e}")
-                    speak("An error occurred")
-                    
-        except Exception as e:
-            print(f"   ❌ Microphone initialization error: {e}")
-            speak("Microphone not available")
-        finally:
-            self.voice_active = False
     
     def _voice_play_now(self):
         """Voice recognition for playing song immediately"""
