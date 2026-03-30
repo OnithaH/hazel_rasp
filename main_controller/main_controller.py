@@ -111,7 +111,9 @@ run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs
 # --- 5. MAIN LOOP ---
 current_active_mode = "General"
 last_mode_change_time = 0
+last_vol_change_time = 0
 MODE_SWITCH_COOLDOWN = 3.0 # Guard timer
+VOL_CHANGE_COOLDOWN = 0.3 # Prevention against spam
 
 try:
     last_sync = 0
@@ -162,11 +164,13 @@ try:
             
             # --- MODE BUTTONS DISABLED PER USER REQUEST ---
             # (Stops ghost-switch interference/yapping loops)
-            if "Vol up" in raw:     
+            if "Vol up" in raw and (now - last_vol_change_time > VOL_CHANGE_COOLDOWN):     
                 os.system("amixer set Master 5%+")
+                last_vol_change_time = now
             
-            elif "Vol down" in raw:   
+            elif "Vol down" in raw and (now - last_vol_change_time > VOL_CHANGE_COOLDOWN):
                 os.system("amixer set Master 5%-")
+                last_vol_change_time = now
             
             # C. Parse DHT Telemetry (Keep active for health monitoring)
             elif "T:" in raw:

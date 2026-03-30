@@ -110,6 +110,8 @@ def main():
             return
         
         # --- AUDIO SETUP ---
+        # Fixed for Pi hardware to prevent latency/silence
+        pygame.mixer.pre_init(44100, -16, 2, 512)
         pygame.mixer.init()
         # Separate channels for different alerts if needed, but simple music/channel is fine
         ft_alarm_path = os.path.join(SCRIPT_DIR, "Alarm_Sound_FT.mp3")
@@ -121,27 +123,22 @@ def main():
 
         print(f"🚀 Hazel Sentinel ACTIVE (Phone Detection: {session['phone_detection_enabled']})")
         
-        frame_count = 0
-        last_db_log_time = 0
+        last_vol_change_time = 0
+        VOL_CHANGE_COOLDOWN = 0.5   # Prevention against spam
         current_alert_type = None # None, "FT", "PD"
         try:
             while True:
                 frame_raw = picam2.capture_array()
                 if frame_raw is None: continue
                 frame = cv2.cvtColor(frame_raw, cv2.COLOR_BGRA2BGR)
-                frame_count += 1
                 
-                # OPTIMIZATION: Check for drowsiness/phone every few frames to prevent lag
-                # This keeps the motion fluid and the robot responsive
-                drowsy = False
+                # --- PER USER REQUEST: NO FRAME SKIPPING (EVERY FRAME MODE) ---
+                # Check Drowsiness (Every frame)
+                drowsy = Focus_Tracking.is_drowsy(frame)
+                
+                # Check Phone (Every frame, if enabled)
                 phone = False
-                
-                # Check Drowsiness (Every 2nd frame)
-                if frame_count % 2 == 0:
-                    drowsy = Focus_Tracking.is_drowsy(frame)
-                
-                # Check Phone (Every 3rd frame, if enabled)
-                if session['phone_detection_enabled'] and frame_count % 3 == 0:
+                if session['phone_detection_enabled']:
                     phone = Phone_Detection.detect_phone(frame)
 
                 # --- ALERT LOGIC ---
