@@ -8,7 +8,10 @@ from groq import Groq
 from dotenv import load_dotenv
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 
-load_dotenv()
+# --- ABSOLUTE PATH CONFIG ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(SCRIPT_DIR, ".env")
+load_dotenv(env_path)
 
 # 1. CLIENTS & SYSTEM SETUP
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -97,6 +100,18 @@ def on_message(self, result, **kwargs):
 async def main():
     global main_loop
     main_loop = asyncio.get_running_loop()
+
+    # --- MODE SAFETY CHECK ---
+    mode_file = "/tmp/hazel_current_mode.txt"
+    try:
+        if os.path.exists(mode_file):
+            with open(mode_file, "r") as f:
+                current_mode = f.read().strip()
+            if current_mode != "General":
+                print(f"🛑 MODE MISMATCH: Live Convo cannot run in {current_mode} mode. Exiting.")
+                return 
+    except Exception as e:
+        print(f"⚠️ Mode check failed: {e}")
 
     dg_connection = dg_client.listen.websocket.v("1")
     dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)

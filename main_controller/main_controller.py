@@ -59,6 +59,13 @@ def run_program(script_path, venv_path, needs_face=True, needs_convo=False, mode
     
     # A. Voice Announcement
     speak(f"Now you are in {mode_name} mode")
+    
+    # Update current mode state for background services
+    try:
+        with open("/tmp/hazel_current_mode.txt", "w") as f:
+            f.write(mode_name)
+    except Exception as e:
+        print(f"⚠️ Failed to write mode state: {e}")
 
     # B. Stop existing mode cleanly to release Camera hardware
     if active_process:
@@ -113,6 +120,8 @@ except Exception as e:
     print(f"❌ Serial Error: {e}")
 
 # Initial Mode Start (Enabling voice conversation by default)
+with open("/tmp/hazel_current_mode.txt", "w") as f:
+    f.write("General")
 run_program("general_mode/general_mode.py", ENV_GENERAL, needs_face=False, needs_convo=True, mode_name="General")
 
 # --- 5. MAIN LOOP ---
