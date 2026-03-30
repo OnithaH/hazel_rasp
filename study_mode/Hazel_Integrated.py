@@ -15,9 +15,6 @@ BREAK_TRIGGER = "/tmp/hazel_break_trigger.json"
 db = DBManager()
 current_session_id = None
 
-# Optimization for RPi Audio in background
-os.environ["SDL_AUDIODRIVER"] = "alsa"
-
 # --- SIGNAL HANDLER FOR CLEAN EXIT ---
 def signal_handler(sig, frame):
     global current_session_id

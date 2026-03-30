@@ -6,15 +6,14 @@ detection_counter = 0
 is_alerting = False
 
 def detect_phone(frame):
-    """Highly optimized phone detection for RPi5."""
+    """Original accurate phone detection logic."""
     global detection_counter
-    # Only detect class 67 (cell phone) to save processing time
-    results = model.predict(frame, conf=0.3, classes=[67], verbose=False)[0]
-    has_phone = len(results.boxes) > 0
+    results = model(frame, verbose=False)[0]
+    has_phone = any(int(box.cls[0]) == 67 and float(box.conf[0]) > 0.2 for box in results.boxes)
     
     if has_phone: 
         detection_counter += 1
-        if detection_counter >= 2: # Reduce from 3 to 2 for slightly faster response
+        if detection_counter >= 3:
             return True
     else: 
         detection_counter = 0
